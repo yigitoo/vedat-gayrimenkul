@@ -1,4 +1,5 @@
 const { currentMonth } = require('./format');
+const { TRASH_DAYS } = require('../services/tenantTrash');
 
 function parsePeriod(query = {}) {
   const fallback = currentMonth();
@@ -40,6 +41,10 @@ function serializeTenant(tenant) {
       }))
       .sort((a, b) => new Date(b.effectiveFrom) - new Date(a.effectiveFrom)),
     isActive: tenant.isActive,
+    deletedAt: isoDate(tenant.deletedAt),
+    purgeAt: tenant.deletedAt
+      ? new Date(new Date(tenant.deletedAt).getTime() + TRASH_DAYS * 86400000).toISOString()
+      : null,
     createdAt: isoDate(tenant.createdAt),
   };
 }

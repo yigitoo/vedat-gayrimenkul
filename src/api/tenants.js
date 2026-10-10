@@ -4,9 +4,6 @@ require('dotenv').config();
 const connectDB = require('../db');
 const { requireWebAuth } = require('../utils/webAuth');
 const Tenant = require('../models/tenant');
-const Payment = require('../models/payment');
-const Expense = require('../models/expense');
-const Recurrence = require('../models/recurrence');
 const {
   notifyRentIncreased,
   notifyTenantArchived,
@@ -106,7 +103,11 @@ module.exports = async (req, res) => {
 
     if (req.method === 'GET') {
       const includeArchived = req.query.includeArchived === 'true';
-      const tenants = await Tenant.find(includeArchived ? {} : { isActive: true }).sort({ name: 1 });
+      const includeDeleted = req.query.includeDeleted === 'true';
+      const filter = includeDeleted
+        ? { isActive: false, deletedAt: { $ne: null } }
+        : includeArchived ? { deletedAt: null } : { isActive: true };
+      const tenants = await Tenant.find(filter).sort(includeDeleted ? { deletedAt: -1 } : { name: 1 });
       return res.status(200).json({ tenants: tenants.map(serializeTenant) });
     }
 
@@ -138,6 +139,7 @@ module.exports = async (req, res) => {
 
     if (req.method === 'PATCH' && action === 'restore') {
       tenant.isActive = true;
+      tenant.deletedAt = null;
       await tenant.save();
       const notification = await notifyTenantRestored(tenant);
       return res.status(200).json({ tenant: serializeTenant(tenant), notification });
@@ -152,36 +154,22 @@ module.exports = async (req, res) => {
       return res.status(200).json({ tenant: serializeTenant(tenant), notification });
     }
 
+    // "Temelli sil" artık önce Silinenler'e taşır; kalıcı silme 15 gün sonra cron'da.
     if (req.method === 'DELETE' && action === 'purge') {
       if (tenant.isActive) {
         return res.status(400).json({ error: 'Aktif kiracı önce arşivlenmeli.' });
       }
-
-      const recurrenceIds = await Recurrence.distinct('_id', { tenant: tenant._id });
-      const [payments, expenses, recurrences] = await Promise.all([
-        Payment.deleteMany({ tenant: tenant._id }),
-        Expense.deleteMany({
-          $or: [
-            { tenant: tenant._id },
-            { recurrence: { $in: recurrenceIds } },
-          ],
-        }),
-        Recurrence.deleteMany({ tenant: tenant._id }),
-      ]);
-      const tenantResult = await Tenant.deleteOne({ _id: tenant._id, isActive: false });
-      if (tenantResult.deletedCount !== 1) {
-        throw new Error('Arşivdeki kiracı silinemedi.');
+      if (!tenant.deletedAt) {
+        tenant.deletedAt = new Date();
+        await tenant.save();
       }
+      return res.status(200).json({ ok: true, id, tenant: serializeTenant(tenant) });
+    }
 
-      return res.status(200).json({
-        ok: true,
-        id,
-        deleted: {
-          payments: payments.deletedCount,
-          expenses: expenses.deletedCount,
-          recurrences: recurrences.deletedCount,
-        },
-      });
+    if (req.method === 'PATCH' && action === 'undelete') {
+      tenant.deletedAt = null;
+      await tenant.save();
+      return res.status(200).json({ tenant: serializeTenant(tenant) });
     }
 
     if (req.method === 'DELETE') {

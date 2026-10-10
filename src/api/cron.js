@@ -4,6 +4,7 @@ require('dotenv').config();
 const connectDB = require('../db');
 const { runDailyReminder, runDueReminders, runMonthlyReminder } = require('../services/notificationService');
 const { materializeDue } = require('../services/recurrence');
+const { purgeExpiredTenants } = require('../services/tenantTrash');
 
 module.exports = async (req, res) => {
   try {
@@ -25,7 +26,10 @@ module.exports = async (req, res) => {
       runMonthlyReminder(),
     ]);
 
-    return res.status(200).json({ recurring, due, daily, monthly });
+    // Silinenler'de 15 günü dolan kiracılar ve kayıtları kalıcı olarak gider.
+    const trash = await purgeExpiredTenants();
+
+    return res.status(200).json({ recurring, due, daily, monthly, trash });
   } catch (error) {
     console.error('Cron error:', error);
     return res.status(500).json({ error: error.message });

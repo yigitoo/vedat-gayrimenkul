@@ -32,7 +32,7 @@ module.exports = async (req, res) => {
     const { month, year } = parsePeriod(req.query);
     const settings = await getSettings();
     const tenants = await Tenant.find({ isActive: true }).sort({ name: 1 });
-    const archivedCount = await Tenant.countDocuments({ isActive: false });
+    const archivedCount = await Tenant.countDocuments({ isActive: false, deletedAt: null });
     const payments = await Payment.find({ month, year }).sort({ date: -1 });
     const expenses = await Expense.find({ month, year }).sort({ date: -1 }).populate('tenant', 'name');
     const paymentsByTenant = buildPaymentsByTenant(payments);

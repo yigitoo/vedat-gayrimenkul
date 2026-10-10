@@ -527,6 +527,7 @@ function PaymentsView({ data, busy, filter, onFilter, onPay, onDefer, onExport, 
 function TenantsView({
   tenants,
   archived,
+  deleted,
   archivedCount,
   showArchived,
   archivedLoading,
@@ -539,6 +540,7 @@ function TenantsView({
   onArchive,
   onRestore,
   onDeleteArchived,
+  onUndelete,
   onOpen,
 }) {
   const normalize = (value) => value.toLocaleLowerCase("tr-TR");
@@ -548,6 +550,9 @@ function TenantsView({
 
   const visible = tenants.filter(match);
   const visibleArchived = showArchived ? archived.filter(match) : [];
+  const visibleDeleted = showArchived ? deleted.filter(match) : [];
+  const daysLeft = (tenant) =>
+    Math.max(Math.ceil((new Date(tenant.purgeAt) - new Date()) / 86400000), 0);
   const monthlyTotal = tenants.reduce((sum, tenant) => sum + tenant.rentAmount, 0);
   const depositTotal = tenants.reduce((sum, tenant) => sum + (tenant.deposit || 0), 0);
 
@@ -635,7 +640,7 @@ function TenantsView({
                       aria-label={tenant.name + " kiracısını temelli sil"}
                     >
                       <Trash weight="bold" />
-                      Temelli sil
+                      Sil
                     </button>
                   </div>
                 </article>
@@ -644,6 +649,42 @@ function TenantsView({
               <p className="chips-empty">Arşivde kayıt yok.</p>
             )}
           </div>
+
+          {/* Silinenler: 15 gün bekler, bu sürede arşive geri getirilebilir. */}
+          {!archivedLoading && visibleDeleted.length ? (
+            <>
+              <h3 className="strip-title">Silinenler · 15 gün sonra kalıcı olarak gider</h3>
+              <div className="rows">
+                {visibleDeleted.map((tenant, index) => (
+                  <article className="row glass glass--quiet is-muted" key={tenant.id} style={{ "--i": index }}>
+                    <div className="who">
+                      <span className="avatar">{initials(tenant.name)}</span>
+                      <div className="who-copy">
+                        <strong>{tenant.name}</strong>
+                        <span>{tenant.address}</span>
+                      </div>
+                    </div>
+                    <div className="row-status">
+                      <span className="pill pill-calm">
+                        <Trash weight="fill" />
+                        {daysLeft(tenant) ? daysLeft(tenant) + " gün kaldı" : "Bugün silinecek"}
+                      </span>
+                    </div>
+                    <div className="row-money">
+                      <strong className="num">{formatCurrency(tenant.rentAmount)}</strong>
+                      <span>son kira</span>
+                    </div>
+                    <div className="row-actions">
+                      <button className="btn btn-glass btn-sm" type="button" onClick={() => onUndelete(tenant)}>
+                        <ArrowCounterClockwise weight="bold" />
+                        Arşive geri getir
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </>
+          ) : null}
         </div>
       ) : (
       <div className="rows">
@@ -854,6 +895,7 @@ export default function Page() {
   const [tenantQuery, setTenantQuery] = useState("");
   const [showArchived, setShowArchived] = useState(false);
   const [archived, setArchived] = useState([]);
+  const [deleted, setDeleted] = useState([]);
   const [archivedLoading, setArchivedLoading] = useState(false);
 
   const [recurrences, setRecurrences] = useState([]);
@@ -1162,8 +1204,12 @@ export default function Page() {
   async function loadArchived() {
     setArchivedLoading(true);
     try {
-      const payload = await apiRequest("/api/tenants?includeArchived=true", {}, token);
+      const [payload, trash] = await Promise.all([
+        apiRequest("/api/tenants?includeArchived=true", {}, token),
+        apiRequest("/api/tenants?includeDeleted=true", {}, token),
+      ]);
       setArchived((payload.tenants || []).filter((tenant) => !tenant.isActive));
+      setDeleted(trash.tenants || []);
     } catch (error) {
       setFlash({ tone: "bad", message: error.message });
     } finally {
@@ -1202,7 +1248,7 @@ export default function Page() {
 
   async function deleteArchivedTenant(tenant) {
     if (!window.confirm(
-      tenant.name + " ve tüm ödeme, gider ve aidat geçmişi kalıcı olarak silinsin mi? Bu işlem geri alınamaz."
+      tenant.name + " silinsin mi? 15 gün boyunca Silinenler'de durur, bu sürede geri getirebilirsin. Sonra ödeme, gider ve aidat geçmişiyle birlikte kalıcı olarak silinir."
     )) return;
     try {
       await apiRequest(
@@ -1210,7 +1256,18 @@ export default function Page() {
         { method: "DELETE" },
         token
       );
-      setFlash({ tone: "ok", message: tenant.name + " ve ilişkili kayıtları kalıcı olarak silindi." });
+      setFlash({ tone: "ok", message: tenant.name + " Silinenler'e taşındı. 15 gün içinde geri getirebilirsin." });
+      await loadArchived();
+      await reload();
+    } catch (error) {
+      setFlash({ tone: "bad", message: error.message });
+    }
+  }
+
+  async function undeleteTenant(tenant) {
+    try {
+      await apiRequest("/api/tenants?id=" + tenant.id + "&action=undelete", { method: "PATCH" }, token);
+      setFlash({ tone: "ok", message: tenant.name + " arşive geri getirildi." });
       await loadArchived();
       await reload();
     } catch (error) {
@@ -1805,6 +1862,7 @@ export default function Page() {
             <TenantsView
               tenants={tenants}
               archived={archived}
+              deleted={deleted}
               archivedCount={data.archivedCount || 0}
               showArchived={showArchived}
               archivedLoading={archivedLoading}
@@ -1817,6 +1875,7 @@ export default function Page() {
               onArchive={archiveTenant}
               onRestore={restoreTenant}
               onDeleteArchived={deleteArchivedTenant}
+              onUndelete={undeleteTenant}
               onOpen={(tenant) => setModal({ type: "detail", tenant })}
             />
           ) : null}

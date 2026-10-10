@@ -32,6 +32,9 @@ const tenantSchema = new Schema({
     createdAt: { type: Date, default: Date.now },
   }],
   isActive: { type: Boolean, default: true },
+  // Arşivden silinen kiracı hemen yok olmaz: 15 gün "Silinenler"de bekler,
+  // bu sürede geri getirilebilir, sonra günlük cron kalıcı olarak temizler.
+  deletedAt: { type: Date, default: null, index: true },
 }, { timestamps: true });
 
 module.exports = model('Tenant', tenantSchema);
