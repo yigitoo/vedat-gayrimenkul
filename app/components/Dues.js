@@ -7,11 +7,9 @@ import {
   CheckCircle,
   Clock,
   DownloadSimple,
-  Minus,
   PencilSimple,
   Plus,
   Trash,
-  WarningCircle,
 } from "@phosphor-icons/react";
 import { downloadCsv, formatCurrency, formatDate, formatMoneyShort } from "../lib/client";
 
@@ -20,17 +18,20 @@ const MONTH_LONG = [
   "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık",
 ];
 
+/* Aidat kutucuğu sözleşme tarihine bakmaz: ödeme alındıysa yeşil,
+   alınmadıysa işaretlenmedi olarak kalır. */
 const CELL = {
   paid: { label: "Ödendi", glyph: CheckCircle },
-  overdue: { label: "Gecikti", glyph: WarningCircle },
-  upcoming: { label: "Yaklaşıyor", glyph: Clock },
-  future: { label: "Sırada", glyph: Plus },
-  outside: { label: "Kapsam dışı", glyph: Minus },
+  unmarked: { label: "İşaretlenmedi", glyph: Plus },
 };
+
+function cellState(cell) {
+  return cell.paid ? "paid" : "unmarked";
+}
 
 function cellTitle(row, cell) {
   const period = MONTH_LONG[cell.month - 1];
-  const state = CELL[cell.status]?.label || "Sırada";
+  const state = CELL[cellState(cell)].label;
   const tail = cell.paid ? "Tutarı düzeltmek için dokunun." : "Ödendi olarak işaretlemek için dokunun.";
   return `${row.label} · ${period} · ${state} · ${formatCurrency(cell.amount)}. ${tail}`;
 }
@@ -69,7 +70,7 @@ export default function DuesView({
         row.title,
         row.tenantName || "Genel",
         row.dayOfMonth,
-        ...row.months.map((cell) => (CELL[cell.status]?.label || "Sırada")),
+        ...row.months.map((cell) => CELL[cellState(cell)].label),
         row.expected,
         row.settled,
         row.outstanding,
@@ -108,8 +109,7 @@ export default function DuesView({
 
       <div className="pg-legend" role="note">
         <span className="pg-key state-paid"><CheckCircle weight="fill" />Ödendi</span>
-        <span className="pg-key state-overdue"><WarningCircle weight="fill" />Gecikti</span>
-        <span className="pg-key state-pending"><Clock weight="fill" />Sırada</span>
+        <span className="pg-key state-pending"><Plus weight="bold" />İşaretlenmedi</span>
         <span className="pg-hint">
           Boş aya dokunun: ödendi işaretlenir ve gider kaydı oluşur. Dolu aya dokunun: tutarı düzeltin.
         </span>
@@ -178,7 +178,8 @@ export default function DuesView({
 
               <div className="pg-months" role="group" aria-label={row.label + " · " + grid.year + " ayları"}>
                 {row.months.map((cell) => {
-                  const info = CELL[cell.status] || CELL.future;
+                  const state = cellState(cell);
+                  const info = CELL[state];
                   const Glyph = info.glyph;
                   const key = row.dueId + ":" + cell.month;
                   const isPending = pending === key;
@@ -187,7 +188,7 @@ export default function DuesView({
                       key={cell.month}
                       type="button"
                       className={
-                        "pg-cell state-" + cell.status +
+                        "pg-cell state-" + state +
                         (isPending ? " is-pending" : "") +
                         (grid.currentMonth === cell.month ? " is-now" : "")
                       }
@@ -243,7 +244,7 @@ export default function DuesView({
           <div className="strip-item">
             <strong className="num">{formatCurrency(totals.outstanding)}</strong>
             <span>Açık aidat</span>
-            <small>{totals.openMonths} geciken ay</small>
+            <small>{totals.dueCount * 12 - totals.paidMonths} işaretlenmemiş ay</small>
           </div>
           <div className="strip-item">
             <strong className="num">{totals.paidMonths}</strong>
