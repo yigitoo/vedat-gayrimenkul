@@ -2996,3 +2996,185 @@ button { cursor: pointer; }
 @media (max-width: 1080px) {
   .ledger-total { grid-template-columns: minmax(0, 1fr); }
 }
+@media (max-width: 720px) {
+  /* Telefonda başlık tam okunsun: tutar ve düğmeler alt satıra iner. */
+  .ledger-duo .feed-item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-areas: "mark body body body" "mark amount edit del";
+    align-items: center;
+    row-gap: 2px;
+  }
+  .ledger-duo .feed-item .feed-mark { grid-area: mark; align-self: start; }
+  .ledger-duo .feed-item .feed-body { grid-area: body; }
+  .ledger-duo .feed-item .feed-body strong { white-space: normal; }
+  .ledger-duo .feed-item .feed-side { grid-area: amount; }
+  .ledger-duo .feed-item .icon-btn:not(.is-danger) { grid-area: edit; }
+  .ledger-duo .feed-item .icon-btn.is-danger { grid-area: del; }
+}
+
+/* ---------- 40. Midas düzeni (mobil) ----------
+   Telefonda cam yerine opak yüzeyler: alt menü ve üst başlık altından
+   kayan içeriği göstermez, kartlar düz ve okunaklı. Menü düğmesi tam
+   ekran "Tüm işlemler" sayfasını açar. */
+
+/* Tam ekran işlemler sayfası (her genişlikte çalışır) */
+.actions-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: var(--a-4);
+  padding:
+    calc(var(--a-5) + env(safe-area-inset-top))
+    max(var(--a-4), env(safe-area-inset-right))
+    0
+    max(var(--a-4), env(safe-area-inset-left));
+  background: var(--bg);
+  animation: actions-in var(--t-mid) var(--ease) both;
+}
+.actions-head { display: flex; align-items: center; justify-content: space-between; gap: var(--a-3); }
+.actions-head h2 { margin: 0; font-size: 26px; font-weight: 750; letter-spacing: -0.03em; }
+.actions-search {
+  width: 100%;
+  max-width: 640px;
+  height: 46px;
+  padding: 0 var(--a-4);
+  border: 1px solid var(--line-strong);
+  background: var(--solid);
+}
+.actions-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.actions-search input { width: 100%; flex: 1; }
+.actions-body {
+  display: grid;
+  gap: var(--a-6);
+  align-content: start;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: calc(var(--a-7) + env(safe-area-inset-bottom));
+  max-width: 640px;
+  width: 100%;
+}
+.actions-body section { display: grid; gap: var(--a-3); }
+.actions-body .strip-title { padding: 0; }
+.actions-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--a-2); }
+.action-tile {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: var(--a-2);
+  padding: var(--a-3) var(--a-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  background: var(--solid);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.2;
+  text-align: center;
+  color: var(--text);
+  transition: transform var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+.action-tile:hover { border-color: var(--accent-line); }
+.action-tile:active { transform: scale(0.95); }
+.action-mark {
+  display: grid;
+  place-items: center;
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.action-mark svg { width: 20px; height: 20px; }
+.actions-screen .more-item { background: var(--solid); border-color: var(--line); }
+.actions-screen .more-item.is-active { border-color: var(--accent); }
+@keyframes actions-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) { .actions-screen { animation: none; } }
+
+@media (max-width: 1080px) {
+  /* Alt menü: tam genişlik, opak, ekranın dibine yapışık */
+  .tabbar {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    transform: none;
+    justify-content: space-around;
+    gap: 0;
+    padding: 6px max(8px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+    border: 0;
+    border-top: 1px solid var(--line-strong);
+    border-radius: 0;
+    background: var(--solid);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: 0 -10px 30px -18px rgba(0, 0, 0, 0.45);
+  }
+  .tabbar::before, .tabbar::after { display: none; }
+  .tab {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    padding: 8px 2px 6px;
+    border-radius: var(--r-2);
+    font-size: 10.5px;
+  }
+  .tab svg { width: 22px; height: 22px; }
+  .tab.is-active { background: transparent; color: var(--accent); }
+  .tab.is-active::before {
+    content: "";
+    position: absolute;
+    top: -6px;
+    left: 30%;
+    right: 30%;
+    height: 3px;
+    border-radius: 0 0 3px 3px;
+    background: var(--accent);
+  }
+  .main { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+
+  /* Kartlar düz ve opak: Midas'taki gibi okunur yüzeyler */
+  .glass--panel,
+  .panel.glass {
+    background: var(--solid);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: var(--sh-1);
+  }
+  .glass--panel::before, .glass--panel::after,
+  .panel.glass::before, .panel.glass::after { display: none; }
+}
+
+@media (max-width: 720px) {
+  /* Üst başlık opak: içerik altından kayarken metne karışmaz.
+     Başlık ve simgeler tek satırda, dönem seçici altında. */
+  .topbar,
+  .topbar.is-stuck {
+    grid-template-columns: minmax(0, 1fr) auto;
+    border-radius: 0;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    padding-top: calc(var(--a-3) + env(safe-area-inset-top));
+  }
+  .topbar-title { grid-column: 1; grid-row: 1; align-self: center; }
+  .topbar-title strong { font-size: 22px; font-weight: 750; letter-spacing: -0.03em; }
+  .topbar-actions { display: contents; }
+  .topbar-actions > .topbar-settings,
+  .topbar-actions > .topbar-theme,
+  .topbar-actions > .topbar-refresh,
+  .topbar-actions > .topbar-signout { grid-row: 1; grid-column: auto; }
+  .topbar:has(.topbar-signout) { grid-template-columns: minmax(0, 1fr) repeat(4, auto); column-gap: 2px; }
+  .topbar-actions > .topbar-upload { grid-row: 2; grid-column: 1 / -1; justify-self: start; }
+  .topbar-actions > .topbar-period { grid-row: 3; grid-column: 1 / -1; width: 100%; justify-content: space-between; }
+
+  .actions-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (max-width: 360px) {
+  .actions-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .topbar-title strong { font-size: 19px; }
+}

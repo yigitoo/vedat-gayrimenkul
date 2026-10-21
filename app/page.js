@@ -5,6 +5,7 @@ import {
   Archive,
   ArrowClockwise,
   ArrowCounterClockwise,
+  ArrowsClockwise,
   ArrowUpRight,
   BellRinging,
   Buildings,
@@ -16,11 +17,11 @@ import {
   ChartLineUp,
   CheckCircle,
   Clock,
-  DotsThree,
   DownloadSimple,
   Envelope,
   GearSix,
   HandCoins,
+  List,
   ListChecks,
   MagnifyingGlass,
   Notebook,
@@ -36,6 +37,7 @@ import {
   Sun,
   TrendUp,
   Trash,
+  UserPlus,
   UsersThree,
   Wallet,
   WarningCircle,
@@ -1946,51 +1948,25 @@ export default function Page() {
           onClick={() => setMoreOpen(true)}
           aria-haspopup="dialog"
         >
-          <DotsThree weight={moreActive ? "fill" : "bold"} />
-          Daha
+          <List weight="bold" />
+          Menü
         </button>
       </nav>
 
       {moreOpen ? (
-        <div
-          className="scrim scrim-bottom"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setMoreOpen(false);
+        <ActionsScreen
+          views={ALL_VIEWS}
+          current={view}
+          onClose={() => setMoreOpen(false)}
+          onGo={goTo}
+          onAction={(next) => {
+            setMoreOpen(false);
+            if (next.view) goTo(next.view);
+            if (next.modal) {
+              setModal(next.modal.type === "recurrence" ? { ...next.modal, day: new Date().getDate() } : next.modal);
+            }
           }}
-        >
-          <div className="more-sheet glass glass--panel" role="dialog" aria-modal="true" aria-label="Diğer bölümler">
-            <div className="sheet-head">
-              <div>
-                <p className="eyebrow">{BRAND}</p>
-                <h2>Diğer bölümler</h2>
-              </div>
-              <button className="icon-btn" type="button" onClick={() => setMoreOpen(false)} aria-label="Kapat">
-                <X weight="bold" />
-              </button>
-            </div>
-            <div className="more-list">
-              {MORE_VIEWS.map((item) => {
-                const Glyph = item.icon;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={"more-item" + (view === item.id ? " is-active" : "")}
-                    onClick={() => goTo(item.id)}
-                  >
-                    <span className="more-mark"><Glyph weight="fill" /></span>
-                    <span className="more-copy">
-                      <strong>{item.label}</strong>
-                      <small>{item.lead}</small>
-                    </span>
-                    <CaretRight weight="bold" />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+        />
       ) : null}
 
       {flash ? (
@@ -2140,6 +2116,121 @@ export default function Page() {
         />
       ) : null}
     </>
+  );
+}
+
+/* ---------- Tüm işlemler ----------
+   Mobil menü tam ekran açılır: üstte arama, hızlı işlemler ızgarası, altta
+   bütün bölümler. Bir şey yapmak isteyen, hangi sayfada olduğunu bilmeden
+   buradan başlar. */
+
+const QUICK_ACTIONS = [
+  { id: "payment", label: "Ödeme kaydet", icon: HandCoins, modal: { type: "payment" }, keywords: "kira tahsilat" },
+  { id: "tenant", label: "Kiracı ekle", icon: UserPlus, modal: { type: "tenant", mode: "create" }, keywords: "sözleşme yeni" },
+  { id: "todo", label: "Not al", icon: ListChecks, view: "todos", keywords: "yapılacak hatırlatma geri sayım" },
+  { id: "ledger", label: "Gider notu", icon: Notebook, view: "ledger", keywords: "harcama masraf" },
+  { id: "expense", label: "Gider ekle", icon: Receipt, modal: { type: "expense" }, keywords: "tamir vergi fatura" },
+  { id: "recurrence", label: "Düzenli gider", icon: ArrowsClockwise, modal: { type: "recurrence" }, keywords: "her ay tekrar" },
+  { id: "due", label: "Aidat kalemi", icon: Buildings, modal: { type: "due" }, keywords: "apartman site" },
+  { id: "reports", label: "Rapor al", icon: ChartLineUp, view: "reports", keywords: "pdf excel indir" },
+];
+
+function ActionsScreen({ views, current, onClose, onGo, onAction }) {
+  const [query, setQuery] = useState("");
+  const needle = normalizeSearch(query);
+  const actions = QUICK_ACTIONS.filter((item) => matchesSearch(needle, item.label, item.keywords));
+  const sections = views.filter((item) => matchesSearch(needle, item.label, item.lead));
+
+  useEffect(() => {
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = overflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  return (
+    <div className="actions-screen" role="dialog" aria-modal="true" aria-label="Tüm işlemler">
+      <div className="actions-head">
+        <div>
+          <p className="eyebrow">{BRAND}</p>
+          <h2>Tüm işlemler</h2>
+        </div>
+        <button className="icon-btn" type="button" onClick={onClose} aria-label="Kapat">
+          <X weight="bold" />
+        </button>
+      </div>
+
+      <div className="search actions-search">
+        <MagnifyingGlass weight="bold" />
+        <input
+          type="search"
+          value={query}
+          placeholder="İşlem ya da bölüm ara"
+          aria-label="İşlem ara"
+          onChange={(event) => setQuery(event.target.value)}
+        />
+      </div>
+
+      <div className="actions-body">
+        {actions.length ? (
+          <section>
+            <p className="strip-title">Hızlı işlemler</p>
+            <div className="actions-grid">
+              {actions.map((item) => {
+                const Glyph = item.icon;
+                return (
+                  <button key={item.id} type="button" className="action-tile" onClick={() => onAction(item)}>
+                    <span className="action-mark"><Glyph weight="fill" /></span>
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+
+        {sections.length ? (
+          <section>
+            <p className="strip-title">Bölümler</p>
+            <div className="more-list">
+              {sections.map((item) => {
+                const Glyph = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={"more-item" + (current === item.id ? " is-active" : "")}
+                    onClick={() => onGo(item.id)}
+                    aria-current={current === item.id ? "page" : undefined}
+                  >
+                    <span className="more-mark"><Glyph weight="fill" /></span>
+                    <span className="more-copy">
+                      <strong>{item.label}</strong>
+                      <small>{item.lead}</small>
+                    </span>
+                    <CaretRight weight="bold" />
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+
+        {!actions.length && !sections.length ? (
+          <div className="empty">
+            <MagnifyingGlass weight="duotone" />
+            <strong>Sonuç yok</strong>
+            <span>Başka bir kelimeyle deneyin.</span>
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
