@@ -47,7 +47,6 @@ import BusBoard from "./components/BusBoard";
 import { BusDaySheet, BusSheet } from "./components/BusSheets";
 import DuesView from "./components/Dues";
 import MonthSheet from "./components/MonthSheet";
-import ExpensesView from "./components/Expenses";
 import LedgerView from "./components/Ledger";
 import TodosView from "./components/Todos";
 import PaymentGrid from "./components/PaymentGrid";
@@ -117,7 +116,6 @@ const VIEWS = [
   { id: "todos", label: "Yapılacaklar", icon: ListChecks, lead: "Güne not düş, saatine kadar geri sayım işlesin." },
   { id: "dues", label: "Aidat", icon: Buildings, lead: "Apartman ve site aidatı: hangi ay ödendi." },
   { id: "bus", label: "Otobüs", icon: Bus, lead: "Hat defteri: gün gün hasılat, mazot, yövmiye." },
-  { id: "expenses", label: "Giderler", icon: Receipt, lead: "Tamir, vergi, sigorta: net gelirin diğer yarısı." },
   { id: "ledger", label: "Gider notları", icon: Notebook, lead: "Her şeyden bağımsız harcamalar: gün gün, ay ay." },
   { id: "reports", label: "Raporlar", icon: ChartLineUp, lead: "Aylara yayılan tahsilat, gider ve gündem." },
   { id: "activity", label: "Akış", icon: Pulse, lead: "Son kayıtlar ve bildirim geçmişi." },
@@ -1134,22 +1132,6 @@ export default function Page() {
     data,
   ]);
 
-  // Düzenli kalemler yalnız gider ekranında gerekiyor.
-  useEffect(() => {
-    if (view !== "expenses" || !token) return undefined;
-    let cancelled = false;
-    apiRequest("/api/recurrences", {}, token)
-      .then((payload) => {
-        if (!cancelled) setRecurrences(payload.recurrences || []);
-      })
-      .catch(() => {
-        /* düzenli kalemler alınamadıysa ekranın kalanı çalışmayı sürdürür */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [view, token, data]);
-
   useEffect(() => {
     if (!flash) return undefined;
     const timer = window.setTimeout(() => setFlash(null), 4200);
@@ -1583,7 +1565,7 @@ export default function Page() {
 
   const metrics = data.metrics;
   const active = ALL_VIEWS.find((item) => item.id === view) || VIEWS[0];
-  const showPeriod = ["overview", "calendar", "expenses"].includes(view) ||
+  const showPeriod = ["overview", "calendar"].includes(view) ||
     (view === "payments" && paymentTab === "period");
   const attention = metrics.overdueCount + metrics.partialCount;
   const sessionEnds = session.expiresAt ? formatShortDate(session.expiresAt, true) : "";
@@ -1845,25 +1827,6 @@ export default function Page() {
               onOpenDay={openBusDay}
               onAddBus={() => setModal({ type: "bus" })}
               onEditBus={(bus) => setModal({ type: "bus", bus })}
-            />
-          ) : null}
-
-          {view === "expenses" ? (
-            <ExpensesView
-              data={data}
-              expenses={data.expenses || []}
-              planned={data.planned || []}
-              recurrences={recurrences}
-              categories={data.expenseCategories || []}
-              busy={loading}
-              token={token}
-              onAdd={() => setModal({ type: "expense" })}
-              onAddRecurrence={() => setModal({ type: "recurrence", day: new Date().getDate() })}
-              onChanged={async (message) => {
-                setFlash({ tone: "ok", message });
-                await reload();
-              }}
-              onError={(message) => setFlash({ tone: "bad", message })}
             />
           ) : null}
 
@@ -2188,7 +2151,7 @@ function screenId(value) {
     odemeler: "payments",
     aidat: "dues",
     otobus: "bus",
-    giderler: "expenses",
+    giderler: "ledger",
     yapilacaklar: "todos",
     notlar: "todos",
     gidernotlari: "ledger",
