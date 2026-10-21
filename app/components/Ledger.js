@@ -44,6 +44,7 @@ export default function LedgerView({ token, onFlash }) {
   const [year, setYear] = useState(() => new Date().getFullYear());
   const [month, setMonth] = useState(() => new Date().getMonth() + 1);
   const [entries, setEntries] = useState([]);
+  const [summary, setSummary] = useState({ total: 0, count: 0, months: [] });
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState(() => emptyForm(new Date().getFullYear(), new Date().getMonth() + 1));
   const [saving, setSaving] = useState(false);
@@ -55,6 +56,7 @@ export default function LedgerView({ token, onFlash }) {
     try {
       const payload = await apiRequest("/api/ledger?year=" + year, {}, token);
       setEntries(payload.entries || []);
+      setSummary(payload.summary || { total: 0, count: 0, months: [] });
     } catch (error) {
       onFlash("bad", error.message);
     } finally {
@@ -194,6 +196,40 @@ export default function LedgerView({ token, onFlash }) {
 
   return (
     <div className="view" data-busy={loading} aria-busy={loading}>
+      <article className="panel glass ledger-total">
+        <div className="ledger-total-main">
+          <p className="eyebrow">Tüm gider notları</p>
+          <h2>Genel toplam</h2>
+          <strong className="num tone-warn">{formatCurrency(summary.total)}</strong>
+          <small>
+            {summary.count} kayıt · {summary.months.length} ay
+            {summary.months.length ? " · aylık ortalama " + formatCurrency(summary.total / summary.months.length) : ""}
+          </small>
+        </div>
+        {summary.months.length ? (
+          <div className="ledger-total-months" aria-label="Ay ay toplamlar">
+            {summary.months.map((item) => (
+              <button
+                key={item.year + "-" + item.month}
+                type="button"
+                className={"ledger-total-month" + (item.year === year && item.month === month ? " is-active" : "")}
+                onClick={() => {
+                  setYear(item.year);
+                  setMonth(item.month);
+                  setTab("list");
+                }}
+              >
+                <span>{MONTHS[item.month - 1]} {item.year}</span>
+                <small>{item.count} kayıt</small>
+                <strong className="num">{formatCurrency(item.total)}</strong>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="chips-empty">Henüz gider notu yok.</p>
+        )}
+      </article>
+
       <div className="view-bar">
         <div className="cal-nav">
           <button type="button" className="icon-btn" onClick={() => shiftMonth(-1)} aria-label="Önceki ay">

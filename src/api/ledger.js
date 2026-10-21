@@ -57,8 +57,29 @@ module.exports = async (req, res) => {
 
     if (req.method === 'GET') {
       const year = parseYear(req.query.year);
-      const entries = await LedgerEntry.find({ year }).sort({ month: -1, day: -1, createdAt: -1 });
-      return res.status(200).json({ year, entries: entries.map(serializeEntry) });
+      const [entries, months] = await Promise.all([
+        LedgerEntry.find({ year }).sort({ month: -1, day: -1, createdAt: -1 }),
+        // Genel toplam paneli yıldan bağımsız: girilen her kayıt, ay ay.
+        LedgerEntry.aggregate([
+          { $group: { _id: { year: '$year', month: '$month' }, total: { $sum: '$amount' }, count: { $sum: 1 } } },
+          { $sort: { '_id.year': -1, '_id.month': -1 } },
+        ]),
+      ]);
+      const summary = months.map((item) => ({
+        year: item._id.year,
+        month: item._id.month,
+        total: item.total,
+        count: item.count,
+      }));
+      return res.status(200).json({
+        year,
+        entries: entries.map(serializeEntry),
+        summary: {
+          total: summary.reduce((sum, item) => sum + item.total, 0),
+          count: summary.reduce((sum, item) => sum + item.count, 0),
+          months: summary,
+        },
+      });
     }
 
     if (req.method === 'POST') {
