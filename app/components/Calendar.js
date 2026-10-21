@@ -24,7 +24,9 @@ function dayOf(value) {
 }
 
 /* Takvim üç kaynaktan beslenir: kira durumları, gerçekleşen giderler ve
-   henüz gerçekleşmemiş düzenli kalemler. Hepsi aynı gün kutusunda toplanır. */
+   henüz gerçekleşmemiş düzenli kalemler. Hepsi aynı gün kutusunda toplanır.
+   Aidat kalemleri burada gösterilmez; kendi sayfası (Aidat) var ve her ay
+   tekrarlandığı için takvimi kalabalıklaştırıyordu. */
 function buildEvents({ month, year, statuses, expenses, planned }) {
   const events = [];
 
@@ -46,6 +48,7 @@ function buildEvents({ month, year, statuses, expenses, planned }) {
   }
 
   for (const expense of expenses) {
+    if (expense.category === "aidat") continue;
     const date = dayOf(expense.date);
     if (!date || date.getMonth() + 1 !== month || date.getFullYear() !== year) continue;
     events.push({
@@ -59,6 +62,7 @@ function buildEvents({ month, year, statuses, expenses, planned }) {
   }
 
   for (const item of planned) {
+    if (item.category === "aidat") continue;
     const date = dayOf(item.dueDate);
     if (!date || date.getMonth() + 1 !== month || date.getFullYear() !== year) continue;
     events.push({

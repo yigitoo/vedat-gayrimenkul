@@ -9,6 +9,7 @@ const routes = {
   deferments: () => require('../../src/api/deferments'),
   dues: () => require('../../src/api/dues'),
   expenses: () => require('../../src/api/expenses'),
+  ledger: () => require('../../src/api/ledger'),
   notifications: () => require('../../src/api/notifications'),
   payments: () => require('../../src/api/payments'),
   recurrences: () => require('../../src/api/recurrences'),
@@ -17,6 +18,7 @@ const routes = {
   settings: () => require('../../src/api/settings'),
   'set-webhook': () => require('../../src/api/set-webhook'),
   tenants: () => require('../../src/api/tenants'),
+  todos: () => require('../../src/api/todos'),
   webhook: () => require('../../src/api/webhook'),
 };
 

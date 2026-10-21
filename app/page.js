@@ -21,7 +21,9 @@ import {
   Envelope,
   GearSix,
   HandCoins,
+  ListChecks,
   MagnifyingGlass,
+  Notebook,
   Moon,
   PaperPlaneTilt,
   PencilSimple,
@@ -46,6 +48,8 @@ import { BusDaySheet, BusSheet } from "./components/BusSheets";
 import DuesView from "./components/Dues";
 import MonthSheet from "./components/MonthSheet";
 import ExpensesView from "./components/Expenses";
+import LedgerView from "./components/Ledger";
+import TodosView from "./components/Todos";
 import PaymentGrid from "./components/PaymentGrid";
 import ReportsView from "./components/Reports";
 import SettingsView from "./components/Settings";
@@ -110,9 +114,11 @@ const VIEWS = [
   { id: "calendar", label: "Takvim", icon: CalendarBlank, lead: "Hangi gün kimden ne bekleniyor.", primary: true },
   { id: "payments", label: "Ödemeler", icon: Wallet, lead: "Dönem defteri: kim ödedi, kim gecikti.", primary: true },
   { id: "tenants", label: "Kiracılar", icon: UsersThree, lead: "Sözleşmeler, kira tutarları ve dosyalar.", primary: true },
+  { id: "todos", label: "Yapılacaklar", icon: ListChecks, lead: "Güne not düş, saatine kadar geri sayım işlesin." },
   { id: "dues", label: "Aidat", icon: Buildings, lead: "Apartman ve site aidatı: hangi ay ödendi." },
   { id: "bus", label: "Otobüs", icon: Bus, lead: "Hat defteri: gün gün hasılat, mazot, yövmiye." },
   { id: "expenses", label: "Giderler", icon: Receipt, lead: "Tamir, vergi, sigorta: net gelirin diğer yarısı." },
+  { id: "ledger", label: "Gider notları", icon: Notebook, lead: "Her şeyden bağımsız harcamalar: gün gün, ay ay." },
   { id: "reports", label: "Raporlar", icon: ChartLineUp, lead: "Aylara yayılan tahsilat, gider ve gündem." },
   { id: "activity", label: "Akış", icon: Pulse, lead: "Son kayıtlar ve bildirim geçmişi." },
 ];
@@ -950,6 +956,9 @@ export default function Page() {
     observer.observe(node);
     return () => observer.disconnect();
   }, [booted, session, data]);
+
+  // Kendi verisini çeken ekranlar (yapılacaklar, gider notları) için sabit kimlikli bildirim.
+  const notify = useCallback((tone, message) => setFlash({ tone, message }), []);
 
   const signOut = useCallback(async (message) => {
     clearSession();
@@ -1858,6 +1867,10 @@ export default function Page() {
             />
           ) : null}
 
+          {view === "todos" ? <TodosView token={token} onFlash={notify} /> : null}
+
+          {view === "ledger" ? <LedgerView token={token} onFlash={notify} /> : null}
+
           {view === "tenants" ? (
             <TenantsView
               tenants={tenants}
@@ -2176,6 +2189,9 @@ function screenId(value) {
     aidat: "dues",
     otobus: "bus",
     giderler: "expenses",
+    yapilacaklar: "todos",
+    notlar: "todos",
+    gidernotlari: "ledger",
     kiracilar: "tenants",
     raporlar: "reports",
     akis: "activity",
