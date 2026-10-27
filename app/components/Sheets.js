@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   ArrowUpRight,
   Envelope,
@@ -18,6 +18,7 @@ import {
   toDateInput,
 } from "../lib/client";
 import MoneyField from "./MoneyField";
+import { askConfirm } from "./Feedback";
 
 function FormError({ message }) {
   if (!message) return null;
@@ -29,8 +30,10 @@ function FormError({ message }) {
   );
 }
 
-export function SheetFrame({ eyebrow, title, wide, onClose, children }) {
+export function SheetFrame({ eyebrow, title, wide, size, onClose, children }) {
   const cardRef = useRef(null);
+  const lastSubmit = useRef(0);
+  const titleId = useId();
 
   useEffect(() => {
     const previous = document.activeElement;
@@ -73,16 +76,26 @@ export function SheetFrame({ eyebrow, title, wide, onClose, children }) {
       }}
     >
       <div
-        className={"sheet glass glass--panel" + (wide ? " sheet-wide" : "")}
+        className={"sheet glass glass--panel" + (wide ? " sheet-wide" : "") + (size ? " sheet-" + size : "")}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="sheet-title"
+        aria-labelledby={titleId}
         ref={cardRef}
+        onSubmitCapture={(event) => {
+          // Enter'a art arda basılınca aynı kayıt iki kez oluşmasın.
+          const now = Date.now();
+          if (now - lastSubmit.current < 900) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+          }
+          lastSubmit.current = now;
+        }}
       >
         <div className="sheet-head">
           <div>
             <p className="eyebrow">{eyebrow}</p>
-            <h2 id="sheet-title">{title}</h2>
+            <h2 id={titleId}>{title}</h2>
           </div>
           <button className="icon-btn" type="button" onClick={onClose} aria-label="Pencereyi kapat">
             <X weight="bold" />
@@ -525,9 +538,13 @@ export function TenantDetailSheet({ tenant, token, onClose, onChanged }) {
   }, [tenant.id, token]);
 
   async function removePayment(payment) {
-    if (!window.confirm(
-      formatCurrency(payment.amount) + " tutarındaki kayıt silinsin mi? Bu işlem geri alınamaz."
-    )) return;
+    const ok = await askConfirm({
+      title: "Ödeme kaydı silinsin mi?",
+      message: formatCurrency(payment.amount) + " tutarındaki kayıt silinir; bu dönemin durumu yeniden hesaplanır.",
+      confirmLabel: "Sil",
+      tone: "danger",
+    });
+    if (!ok) return;
 
     setRemoving(payment.id);
     setError("");
@@ -563,7 +580,7 @@ export function TenantDetailSheet({ tenant, token, onClose, onChanged }) {
   const total = (payments || []).reduce((sum, item) => sum + item.amount, 0);
   const state = contractState(tenant);
   const preview = raise.amount
-    ? Number(String(raise.amount).replace(",", "."))
+    ? parseMoney(raise.amount) || 0
     : raise.rate
       ? Math.round(tenant.rentAmount * (1 + Number(String(raise.rate).replace(",", ".")) / 100))
       : 0;

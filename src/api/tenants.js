@@ -229,3 +229,6 @@ module.exports = async (req, res) => {
     return res.status(status).json({ error: error.message || 'Kiracı işlemi başarısız.' });
   }
 };
+
+// TÜFE artış önerisini onaylayan uç nokta aynı zam mantığını kullansın diye.
+module.exports.computeRaise = computeRaise;

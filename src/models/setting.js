@@ -1,4 +1,4 @@
-const { Schema, model } = require('mongoose');
+const { Schema, model, models } = require('mongoose');
 
 /* Uygulama ayarları tek bir belgede durur (key: 'app').
    Liste boşsa ortam değişkenindeki değer geçerlidir; bu yüzden alanı
@@ -9,4 +9,5 @@ const settingSchema = new Schema({
   telegramChatIds: { type: [String], default: [] },
 }, { timestamps: true });
 
-module.exports = model('Setting', settingSchema);
+// Sıcak yenilemede model ikinci kez derlenmesin.
+module.exports = models.Setting || model('Setting', settingSchema);

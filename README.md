@@ -63,6 +63,30 @@ ay** matrisi yer alır.
 Telegram hedefi. Boş bırakılan liste Vercel'deki `EMAIL_TO` / `OWNER_CHAT_ID`
 değerine döner. Günlük/aylık özet ve testler elle çalıştırılabilir.
 
+**Arayüz** · Gruplu yan menü (bilgisayar), ikonlu dar ray (tablet), alt menü ve
+alttan açılan pencereler (telefon). ⌘K / Ctrl+K ya da "/" ile her yerden arama:
+kiracı, bölüm, işlem. **Gizlilik modu** (göz düğmesi, ⌘⇧H) bütün tutarları
+"•••• TL" olarak maskeler. Üst şeritteki palet düğmesinden yedi yumuşak renk
+paleti ve açık/koyu tema seçilir; seçimler cihazda hatırlanır. Geri alınabilir
+işlemlerde bildirimde "Geri al" çıkar. Takvimin üstünde ayın beklenen, gelen,
+kalan, gider ve net tutarları durur.
+
+**Zam önerisi (TÜFE)** · Kira yılı dolan (ya da 30 gün içinde dolacak) kiracı
+için yasal üst sınır olan 12 aylık ortalama TÜFE ile yeni kira hesaplanır ve
+Özet ile Kiracılar'da onayına sunulur: TÜFE ile, sözleşme oranıyla ya da elle
+tutar; "Şimdilik değil" o yılın önerisini kapatır. Oranlar her ay TÜİK
+açıklamasından sonra kendiliğinden çekilir, Ayarlar'da görülür ve elle
+düzeltilebilir. Öneri ilk çıktığında Telegram ve e-postayla haber verilir.
+
+**Aylık bütün rapor** · Her ayın 1'inde geçen ayın kira, aidat, gider, gider
+notları, otobüs ve gündem dökümü markalı PDF olarak `REPORT_EMAIL` adresine
+(varsayılan vedatugur100@gmail.com) gider. Raporlar sayfasından istenen ay
+indirilebilir ya da hemen e-postalanabilir.
+
+**Giriş** · Şifreden sonra 6 haneli tek kullanımlık kod e-postayla
+(`OTP_EMAIL`, varsayılan vedatugur100@gmail.com) ve yedek olarak Telegram
+botuyla gelir; 10 dakika geçerli, 5 deneme hakkı.
+
 **Teknik** · Tek şifreyle giriş ve 30 gün süren imzalı oturum; Inter
 tipografisi, açık/koyu tema, cam yüzeyler (liquid glass yaklaşımı); iPhone'da
 ana ekrana eklenebilen PWA; idempotent bildirim günlüğü; Vercel cron.
@@ -173,8 +197,15 @@ Vercel projesine şu production değişkenlerini ekleyin:
 - SESSION_SECRET
 - CRON_SECRET
 - PUBLIC_APP_URL
-- İsteğe bağlı: TIMEZONE, DUE_REMINDER_DAYS, LATE_REMINDER_DAYS, EMAIL_USER, EMAIL_PASS, EMAIL_TO
+- İsteğe bağlı: TIMEZONE, DUE_REMINDER_DAYS, LATE_REMINDER_DAYS, EMAIL_USER, EMAIL_PASS, EMAIL_TO, REPORT_EMAIL
 
 /api/cron Vercel cron tarafından günde bir kez çağrılır. CRON_SECRET ile
 korunur. Sırasıyla düzenli giderleri işler, kiracı bazlı ödeme uyarılarını
 (yaklaşan / gecikmiş) gönderir, sonra günlük ve aylık özetleri çalıştırır.
+Ayın 1'inde (İstanbul saati) geçen ayın **aylık bütün raporu** PDF ekiyle
+`REPORT_EMAIL` adresine (boşsa vedatugur100@gmail.com) e-postayla gider: kira,
+aidat, giderler, gider notları, otobüs hattı ve gündem. Ay başına bir kez gider
+(`full-monthly-report:YYYY-AA`); 1'indeki deneme başarısız olursa 2'si ve 3'ü
+yeniden denenir. Eski ay başı özet e-postası bunun yerine geçti, Telegram ay
+özeti yerinde. İstenen ay için indirme `GET /api/reports?kind=full&month=&year=&format=pdf`,
+hemen gönderme `POST /api/reports` `{ kind: 'full', action: 'email', month, year }`.

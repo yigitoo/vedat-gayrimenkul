@@ -162,7 +162,7 @@ module.exports = function registerStartCommands(bot) {
       '🌐 Web paneli',
       url ? url : 'Adres henüz ayarlanmadı (PUBLIC_APP_URL).',
       'Şifre: ' + panelPassword(),
-      'Bir kez girin, oturum ' + SESSION_DAYS + ' gün açık kalır.',
+      'Her girişte e-postaya tek kullanımlık kod gelir; oturum ' + SESSION_DAYS + ' gün açık kalır.',
       '',
       '🔔 Bildirim hedefleri',
       settings

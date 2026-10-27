@@ -30,7 +30,10 @@ async function resolveRecipients(recipients) {
   return settings.emailRecipients;
 }
 
-async function deliver({ subject, text, html, recipients }) {
+/* Ek desteği: nodemailer biçiminde { filename, content, contentType } listesi.
+   HTML ile birlikte düz metin de verilirse ikisi birden gider; HTML açmayan
+   istemci boş ileti görmesin. */
+async function deliver({ subject, text, html, recipients, attachments }) {
   const mailer = getTransporter();
   if (!mailer) return { sent: false, reason: 'not_configured' };
 
@@ -43,6 +46,8 @@ async function deliver({ subject, text, html, recipients }) {
       to: to.join(', '),
       subject,
       ...(html ? { html } : { text }),
+      ...(html && text ? { text } : {}),
+      ...(Array.isArray(attachments) && attachments.length ? { attachments } : {}),
     });
     return { sent: true, recipients: to };
   } catch (error) {
@@ -55,8 +60,10 @@ function sendMail(subject, text, recipients) {
   return deliver({ subject, text, recipients });
 }
 
-function sendHtmlMail(subject, html, recipients) {
-  return deliver({ subject, html, recipients });
+/* Dördüncü parametre isteğe bağlı: { text, attachments }. Eski çağrılar
+   olduğu gibi çalışır. */
+function sendHtmlMail(subject, html, recipients, options = {}) {
+  return deliver({ subject, html, recipients, text: options.text, attachments: options.attachments });
 }
 
 module.exports = { isMailConfigured, sendMail, sendHtmlMail };

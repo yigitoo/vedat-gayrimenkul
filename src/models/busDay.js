@@ -1,4 +1,4 @@
-const { Schema, model } = require('mongoose');
+const { Schema, model, models } = require('mongoose');
 
 /* Bir aracın bir günü. Elde tutulan kâğıttaki kalemlerin birebir karşılığı:
    Toplam − (Mazot + Yövmiye + Denekçi + Diğer) = Kalan.
@@ -31,6 +31,7 @@ busDaySchema.pre('validate', function hesapla() {
   this.net = Math.round(((this.gross || 0) - gider) * 100) / 100;
 });
 
-module.exports = model('BusDay', busDaySchema);
+// Sıcak yenilemede model ikinci kez derlenmesin.
+module.exports = models.BusDay || model('BusDay', busDaySchema);
 module.exports.EXPENSE_FIELDS = ['fuel', 'wage', 'fee', 'other'];
 module.exports.LABELS = { gross: 'Toplam', fuel: 'Mazot', wage: 'Yövmiye', fee: 'Denekçi', other: 'Diğer', net: 'Kalan' };

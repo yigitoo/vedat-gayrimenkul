@@ -1,22 +1,36 @@
 {
   "name": "Kira Takip",
   "short_name": "Kira Takip",
-  "description": "Kiracı, ödeme ve bildirimleri tek akışta yönetin.",
+  "description": "Kiracı, ödeme ve bildirimleri tek akışta yönet.",
   "lang": "tr",
   "dir": "ltr",
   "start_url": "/",
   "scope": "/",
   "id": "/",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
-  "background_color": "#e6ebf5",
-  "theme_color": "#e6ebf5",
-  "orientation": "portrait",
-  "categories": ["finance", "productivity"],
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "background_color": "#f2f4f9",
+  "theme_color": "#f2f4f9",
+  "categories": [
+    "finance",
+    "productivity"
+  ],
   "shortcuts": [
-    { "name": "Ödeme ekle", "url": "/?ekran=odemeler&islem=odeme" },
-    { "name": "Takvim", "url": "/?ekran=takvim" },
-    { "name": "Kiracılar", "url": "/?ekran=kiracilar" }
+    {
+      "name": "Ödeme ekle",
+      "url": "/?ekran=odemeler&islem=odeme"
+    },
+    {
+      "name": "Takvim",
+      "url": "/?ekran=takvim"
+    },
+    {
+      "name": "Kiracılar",
+      "url": "/?ekran=kiracilar"
+    }
   ],
   "icons": [
     {

@@ -1,4 +1,4 @@
-const { Schema, model } = require('mongoose');
+const { Schema, model, models } = require('mongoose');
 
 /* Not defteri gideri. Net gelire, aidata ya da kiracıya karışmaz; yalnız
    "ne zaman neye ne harcadım" sorusunun cevabı. Gün/ay/yıl ayrı tutulur,
@@ -14,4 +14,5 @@ const ledgerEntrySchema = new Schema({
 
 ledgerEntrySchema.index({ year: 1, month: 1, day: 1 });
 
-module.exports = model('LedgerEntry', ledgerEntrySchema);
+// Sıcak yenilemede model ikinci kez derlenmesin.
+module.exports = models.LedgerEntry || model('LedgerEntry', ledgerEntrySchema);

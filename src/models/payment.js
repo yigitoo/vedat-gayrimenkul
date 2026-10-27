@@ -1,4 +1,4 @@
-const { Schema, model } = require('mongoose');
+const { Schema, model, models } = require('mongoose');
 
 /* Kayıt nereden geldi: panel mi bot mu, yoksa zamanlanmış iş mi.
    İki arayüz de aynı koleksiyona yazar; kaynak yalnız iz sürmek için. */
@@ -17,5 +17,6 @@ const paymentSchema = new Schema({
 paymentSchema.index({ tenant: 1, year: 1, month: 1 });
 paymentSchema.index({ year: 1, month: 1 });
 
-module.exports = model('Payment', paymentSchema);
+// Sıcak yenilemede model ikinci kez derlenmesin.
+module.exports = models.Payment || model('Payment', paymentSchema);
 module.exports.SOURCES = SOURCES;

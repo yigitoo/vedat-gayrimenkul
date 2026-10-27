@@ -2,9 +2,12 @@ const Tenant = require('../models/tenant');
 const Payment = require('../models/payment');
 const Expense = require('../models/expense');
 const Recurrence = require('../models/recurrence');
-const { formatMonthYear } = require('../utils/format');
+const LedgerEntry = require('../models/ledgerEntry');
+const Todo = require('../models/todo');
+const { formatMonthYear, now } = require('../utils/format');
 const { categoryLabel } = require('../utils/categories');
-const { buildDuesPeriod, buildDuesYearGrid, withoutArchivedTenants } = require('../utils/dues');
+const { buildDuesPeriod, buildDuesYearGrid, coversPeriod, withoutArchivedTenants } = require('../utils/dues');
+const { dueDateForDay, getTenantDeferment } = require('../utils/rentSchedule');
 const busService = require('./bus');
 const {
   buildAgenda,
@@ -68,6 +71,7 @@ async function monthReport(month, year) {
       dueDate: cell.dueDate,
       lastDate: cell.lastDate,
       isDeferred: cell.isDeferred,
+      defermentNote: cell.defermentNote || '',
       inside: cell.inside,
     };
   }).sort((a, b) => a.name.localeCompare(b.name, 'tr'));
@@ -100,6 +104,8 @@ async function monthReport(month, year) {
       amount: item.amount,
       date: item.date ? item.date.toISOString() : null,
       tenantName: item.tenant?.name || '',
+      note: item.note || '',
+      recurrenceId: item.recurrence ? item.recurrence.toString() : '',
       paid: item.paid !== false,
     })),
     byCategory: buildCategoryBreakdown(visibleExpenses),
@@ -260,4 +266,203 @@ async function combinedReport(monthCount = 12) {
   };
 }
 
-module.exports = { annualReport, combinedReport, monthReport, rangeReport };
+function round2(value) {
+  return Math.round((value || 0) * 100) / 100;
+}
+
+function dateKey(date) {
+  return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' +
+    String(date.getDate()).padStart(2, '0');
+}
+
+/* Ay sonu bütün rapor: kira, aidat, giderler, gider notları, otobüs hattı
+   ve gündem tek nesnede. Hesaplar yeniden yazılmaz; ay raporu, otobüs ve
+   aidat servisleri olduğu gibi çağrılır, burada yalnız birleştirilir.
+   Net, genel raporun "birleşik net"iyle aynı tanımdır:
+   kira tahsilatı + otobüs kalanı − gider (aidat kayıtları dahil).
+   Otobüs giderleri kalandan zaten düşülmüştür, ikinci kez sayılmaz.
+   Gider notları defteri bilerek nete karışmaz; ayrı toplam olarak durur. */
+async function fullMonthReport(month, year, { reference = now().toDate() } = {}) {
+  const today = new Date(reference);
+  today.setHours(0, 0, 0, 0);
+
+  // Son 6 ayın eğilimi rapor ayında biter; geçmiş bir ay istendiğinde de.
+  const trendStart = new Date(year, month - 6, 1);
+  const trendEnd = new Date(year, month, 0);
+  const trendRange = { start: dateKey(trendStart), end: dateKey(trendEnd) };
+
+  const [base, tenants, ledger, recurrences, todos, kiraTrend, otobusTrend] = await Promise.all([
+    monthReport(month, year),
+    Tenant.find({ isActive: true }).sort({ name: 1 }),
+    LedgerEntry.find({ month, year }).sort({ day: 1, createdAt: 1 }),
+    Recurrence.find({ category: { $ne: 'aidat' } }).sort({ dayOfMonth: 1, title: 1 }).populate('tenant', 'name isActive'),
+    Todo.find({ done: false, dueAt: { $lt: new Date(today.getTime() + 31 * 86400000) } }).sort({ dueAt: 1 }).limit(40),
+    rangeReport(6, { startDate: trendRange.start, endDate: trendRange.end }),
+    busService.periodReport(trendRange),
+  ]);
+
+  /* Giderler ikiye ayrılır: aidat tablosunda görünen kayıtlar bir kez orada,
+     kalanı gider bölümünde. Toplam yine ay raporunun gider toplamıdır. */
+  const dueExpenseIds = new Set(base.dues.rows.map((row) => row.expenseId).filter(Boolean));
+  const dueExpenses = base.expenses.filter((item) => dueExpenseIds.has(item.id));
+  const otherExpenses = base.expenses.filter((item) => !dueExpenseIds.has(item.id));
+  const dueExpenseTotal = round2(dueExpenses.reduce((sum, item) => sum + item.amount, 0));
+  const otherExpenseTotal = round2(otherExpenses.reduce((sum, item) => sum + item.amount, 0));
+
+  const categories = new Map();
+  for (const item of otherExpenses) {
+    const group = categories.get(item.category) || {
+      category: item.category,
+      label: item.categoryLabel,
+      items: [],
+      total: 0,
+      unpaid: 0,
+    };
+    group.items.push(item);
+    group.total = round2(group.total + item.amount);
+    if (!item.paid) group.unpaid = round2(group.unpaid + item.amount);
+    categories.set(item.category, group);
+  }
+  const byCategory = Array.from(categories.values()).sort((a, b) => b.total - a.total);
+
+  // Aidat dışı düzenli kalemler: ay içinde kaydı düştü mü, ödendi mi.
+  const expenseByRecurrence = new Map(
+    base.expenses.filter((item) => item.recurrenceId).map((item) => [item.recurrenceId, item])
+  );
+  const recurring = withoutArchivedTenants(recurrences)
+    .filter((item) => expenseByRecurrence.has(item._id.toString()) ||
+      (item.isActive !== false && coversPeriod(item, month, year)))
+    .map((item) => {
+      const expense = expenseByRecurrence.get(item._id.toString()) || null;
+      return {
+        id: item._id.toString(),
+        title: item.title,
+        category: item.category,
+        categoryLabel: categoryLabel(item.category),
+        dayOfMonth: item.dayOfMonth,
+        tenantName: item.tenant?.name || '',
+        amount: expense ? expense.amount : item.amount,
+        recorded: Boolean(expense),
+        paid: Boolean(expense?.paid),
+        status: expense ? (expense.paid ? 'paid' : 'unpaid') : 'planned',
+      };
+    });
+
+  const deferments = tenants
+    .map((tenant) => {
+      const deferment = getTenantDeferment(tenant, month, year);
+      if (!deferment) return null;
+      return {
+        tenantId: tenant._id.toString(),
+        tenantName: tenant.name,
+        originalDate: dueDateForDay(tenant.paymentDay, month, year).toISOString(),
+        dueDate: new Date(deferment.dueDate).toISOString(),
+        note: deferment.note || '',
+      };
+    })
+    .filter(Boolean);
+
+  const ledgerRows = ledger.map((item) => ({
+    id: item._id.toString(),
+    title: item.title,
+    amount: item.amount,
+    day: item.day,
+    date: new Date(item.year, item.month - 1, item.day, 12).toISOString(),
+    note: item.note || '',
+  }));
+  const ledgerTotal = round2(ledgerRows.reduce((sum, item) => sum + item.amount, 0));
+
+  // Gündem bugünden ileriye bakar: rapor geçmiş bir ay için alınsa bile.
+  const agendaItems = buildAgenda(tenants, today);
+  const agenda = {
+    contracts: agendaItems.filter((item) => item.type === 'contract' && item.days >= 0 && item.days <= 90),
+    increases: agendaItems.filter((item) => item.type === 'increase'),
+    todos: todos.map((item) => {
+      const dueAt = new Date(item.dueAt);
+      const day = new Date(dueAt);
+      day.setHours(0, 0, 0, 0);
+      return {
+        id: item._id.toString(),
+        title: item.title,
+        note: item.note || '',
+        dueAt: dueAt.toISOString(),
+        days: Math.round((day - today) / 86400000),
+      };
+    }),
+  };
+
+  const bus = base.bus;
+  const rentReceived = base.totals.received;
+  const income = round2(rentReceived + bus.totals.net);
+  const expense = round2(base.totals.expense);
+  const net = round2(income - expense);
+
+  const otobusAy = new Map(otobusTrend.series.map((item) => [item.year + '-' + item.month, item]));
+  const trend = kiraTrend.series.map((item) => {
+    const otobus = otobusAy.get(item.year + '-' + item.month) || { net: 0, gross: 0, days: 0 };
+    return {
+      month: item.month,
+      year: item.year,
+      label: item.label,
+      short: item.short,
+      expected: item.expected,
+      received: item.received,
+      expense: item.expense,
+      busGross: otobus.gross,
+      busNet: otobus.net,
+      busDays: otobus.days,
+      net: round2(item.received + otobus.net - item.expense),
+    };
+  });
+  const hasTrend = trend.some((item) => item.received || item.expense || item.busDays);
+
+  return {
+    scope: 'full',
+    month,
+    year,
+    label: base.label,
+    generatedAt: new Date(reference).toISOString(),
+    rent: {
+      rows: base.rows,
+      payments: base.payments,
+      deferments,
+      totals: base.totals,
+    },
+    dues: { ...base.dues, recordedTotal: dueExpenseTotal },
+    expenses: {
+      rows: otherExpenses,
+      byCategory,
+      recurring,
+      totals: {
+        total: otherExpenseTotal,
+        paid: round2(otherExpenses.filter((item) => item.paid).reduce((sum, item) => sum + item.amount, 0)),
+        unpaid: round2(otherExpenses.filter((item) => !item.paid).reduce((sum, item) => sum + item.amount, 0)),
+        count: otherExpenses.length,
+        recurringCount: recurring.length,
+        recurringOpen: recurring.filter((item) => item.status !== 'paid').length,
+      },
+    },
+    ledger: { rows: ledgerRows, total: ledgerTotal, count: ledgerRows.length },
+    bus,
+    agenda,
+    trend: hasTrend ? trend : [],
+    totals: {
+      rentExpected: base.totals.expected,
+      rentReceived,
+      rentOutstanding: base.totals.outstanding,
+      rentRate: base.totals.rate,
+      busGross: bus.totals.gross,
+      busExpense: round2(bus.totals.expense),
+      busNet: bus.totals.net,
+      busDays: bus.totals.days,
+      income,
+      expense,
+      expenseOther: otherExpenseTotal,
+      expenseDues: dueExpenseTotal,
+      ledger: ledgerTotal,
+      net,
+    },
+  };
+}
+
+module.exports = { annualReport, combinedReport, fullMonthReport, monthReport, rangeReport };

@@ -15,12 +15,12 @@ const siteUrl = process.env.PUBLIC_APP_URL || "https://rent-track-bot.vercel.app
 export const metadata = {
   metadataBase: new URL(siteUrl),
   title: "Vedat Gayrimenkul · Kira takip paneli",
-  description: "Kiracı, ödeme ve Telegram bildirimlerini tek akışta yönetin.",
+  description: "Kiracı, ödeme ve Telegram bildirimlerini tek akışta yönet.",
   applicationName: "Kira Takip",
   manifest: "/manifest.webmanifest",
   openGraph: {
     title: "Vedat Gayrimenkul · Kira takip paneli",
-    description: "Kiracı, ödeme ve Telegram bildirimlerini tek akışta yönetin.",
+    description: "Kiracı, ödeme ve Telegram bildirimlerini tek akışta yönet.",
     url: siteUrl,
     siteName: "Vedat Gayrimenkul",
     locale: "tr_TR",
@@ -37,7 +37,7 @@ export const metadata = {
   twitter: {
     card: "summary_large_image",
     title: "Vedat Gayrimenkul · Kira takip paneli",
-    description: "Kiracı, ödeme ve Telegram bildirimlerini tek akışta yönetin.",
+    description: "Kiracı, ödeme ve Telegram bildirimlerini tek akışta yönet.",
     images: ["/opengraph-image"],
   },
   icons: {
@@ -58,8 +58,8 @@ export const metadata = {
 
 export const viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#e6ebf5" },
-    { media: "(prefers-color-scheme: dark)", color: "#070a12" },
+    { media: "(prefers-color-scheme: light)", color: "#f2f4f9" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0d15" },
   ],
   width: "device-width",
   initialScale: 1,
@@ -69,7 +69,7 @@ export const viewport = {
 };
 
 // Tema ilk boyamadan önce yerleşir; yoksa açık tema bir kare görünür.
-const themeBoot = `(function(){try{var s=localStorage.getItem("kira-akis-theme");var d=window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.dataset.theme=(s==="dark"||s==="light")?s:(d?"dark":"light");}catch(e){document.documentElement.dataset.theme="light";}})();`;
+const themeBoot = `(function(){try{var s=localStorage.getItem("kira-akis-theme");var d=window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.dataset.theme=(s==="dark"||s==="light")?s:(d?"dark":"light");var a=localStorage.getItem("kira-akis-accent");if(a)document.documentElement.dataset.accent=a;var p=localStorage.getItem("kira-akis-privacy");if(p==="on")document.documentElement.dataset.privacy="on";}catch(e){document.documentElement.dataset.theme="light";}})();`;
 
 export default function RootLayout({ children }) {
   return (

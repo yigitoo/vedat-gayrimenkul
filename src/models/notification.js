@@ -1,4 +1,4 @@
-const { Schema, model } = require('mongoose');
+const { Schema, model, models } = require('mongoose');
 
 const notificationSchema = new Schema({
   key: { type: String, required: true, unique: true, index: true },
@@ -13,4 +13,5 @@ const notificationSchema = new Schema({
   metadata: { type: Schema.Types.Mixed, default: {} },
 }, { timestamps: true });
 
-module.exports = model('Notification', notificationSchema);
+// Sıcak yenilemede model ikinci kez derlenmesin.
+module.exports = models.Notification || model('Notification', notificationSchema);

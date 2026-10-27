@@ -12,6 +12,7 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { BarList } from "./Charts";
+import { askConfirm } from "./Feedback";
 import MoneyField from "./MoneyField";
 import { apiRequest, downloadCsv, formatCurrency, toDateInput } from "../lib/client";
 
@@ -161,7 +162,8 @@ export default function LedgerView({ token, onFlash }) {
   }
 
   async function remove(entry) {
-    if (!window.confirm(entry.title + " kaydı silinsin mi?")) return;
+    const ok = await askConfirm({ title: entry.title + " silinsin mi?", confirmLabel: "Sil", tone: "danger" });
+    if (!ok) return;
     setRemoving(entry.id);
     try {
       await apiRequest("/api/ledger?id=" + entry.id, { method: "DELETE" }, token);

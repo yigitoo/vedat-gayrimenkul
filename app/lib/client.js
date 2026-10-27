@@ -74,11 +74,48 @@ export async function apiRequest(url, options = {}, token = "") {
 }
 
 /* Para okuma/yazma tek yerde: panel, API ve bot aynı kuralı kullanır. */
-export { LIMITS, formatMoneyShort, parseMoney, roundMoney } from "../../src/utils/money";
+import { formatMoneyShort as formatMoneyShortRaw } from "../../src/utils/money";
+export { LIMITS, parseMoney, roundMoney } from "../../src/utils/money";
+
+/* Gizlilik modu: ekrana bakan biri tutarları görmesin. Bütün tutarlar bu
+   dosyadaki biçimlendiricilerden geçtiği için bayrak tek yerde tutulur;
+   sayfa bayrak değişince yeniden çizilir. Girdi alanları etkilenmez. */
+const PRIVACY_KEY = "kira-akis-privacy";
+const MASK = "••••";
+let privacy = false;
+
+export function readPrivacy() {
+  try {
+    privacy = window.localStorage.getItem(PRIVACY_KEY) === "on";
+  } catch {
+    privacy = false;
+  }
+  document.documentElement.dataset.privacy = privacy ? "on" : "off";
+  return privacy;
+}
+
+export function writePrivacy(next) {
+  privacy = Boolean(next);
+  document.documentElement.dataset.privacy = privacy ? "on" : "off";
+  try {
+    window.localStorage.setItem(PRIVACY_KEY, privacy ? "on" : "off");
+  } catch {
+    /* yoksay */
+  }
+}
+
+export function isPrivate() {
+  return privacy;
+}
+
+export function formatMoneyShort(value) {
+  return privacy ? MASK : formatMoneyShortRaw(value);
+}
 
 const currency = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 });
 
 export function formatCurrency(value) {
+  if (privacy) return MASK + " TL";
   return currency.format(Number(value || 0)) + " TL";
 }
 
@@ -214,4 +251,49 @@ export function normalizeSearch(value = "") {
 export function matchesSearch(needle, ...fields) {
   if (!needle) return true;
   return fields.some((field) => normalizeSearch(field).includes(needle));
+}
+
+/* Ayın günü için iyelik eki: "1'i", "6'sı", "10'u", "20'si". Ek, sayının
+   okunuşundaki son ünlüye uyar. */
+const DAY_SUFFIX = { 1: "'i", 2: "'si", 3: "'ü", 4: "'ü", 5: "'i", 6: "'sı", 7: "'si", 8: "'i", 9: "'u" };
+const TENS_SUFFIX = { 1: "'u", 2: "'si", 3: "'u" };
+
+export function dayWithSuffix(day) {
+  const value = Number(day) || 0;
+  const ones = value % 10;
+  return value + (ones ? DAY_SUFFIX[ones] : TENS_SUFFIX[Math.floor(value / 10)] || "'i");
+}
+
+/* Renk paleti: yalnız vurgu rengi ve zeminin hafif tonu değişir; durum
+   renkleri (ödendi, gecikti) her palette aynı kalır ki anlam kaymasın. */
+const ACCENT_KEY = "kira-akis-accent";
+export const ACCENTS = [
+  { id: "mavi", label: "Mavi", swatch: "#2b54d4" },
+  { id: "adacayi", label: "Adaçayı", swatch: "#4f7a63" },
+  { id: "lavanta", label: "Lavanta", swatch: "#6b5fb5" },
+  { id: "okyanus", label: "Okyanus", swatch: "#1f7a8c" },
+  { id: "seftali", label: "Şeftali", swatch: "#b8653d" },
+  { id: "gul", label: "Gül", swatch: "#b0506d" },
+  { id: "grafit", label: "Grafit", swatch: "#3d4655" },
+];
+
+export function readAccent() {
+  let value = "mavi";
+  try {
+    value = window.localStorage.getItem(ACCENT_KEY) || "mavi";
+  } catch {
+    /* yoksay */
+  }
+  if (!ACCENTS.some((item) => item.id === value)) value = "mavi";
+  document.documentElement.dataset.accent = value;
+  return value;
+}
+
+export function writeAccent(value) {
+  document.documentElement.dataset.accent = value;
+  try {
+    window.localStorage.setItem(ACCENT_KEY, value);
+  } catch {
+    /* yoksay */
+  }
 }

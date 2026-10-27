@@ -537,8 +537,9 @@ async function runMonthlyReminder() {
     message: lines.join('\n'),
     metadata: { month: data.month, year: data.year },
   });
-  const email = await sendDigestMail(digestSubject(data), data);
-  return { ...notification, email };
+  // Ay başı e-postası artık geçen ayın bütün raporudur (PDF ekli, bkz.
+  // services/monthlyReport). Burada ikinci bir aylık posta gönderilmez.
+  return { ...notification, email: { sent: false, skipped: true, reason: 'replaced_by_full_report' } };
 }
 
 async function sendReportMail(recipients) {
@@ -547,6 +548,7 @@ async function sendReportMail(recipients) {
 }
 
 module.exports = {
+  claimNotification,
   isTelegramConfigured,
   sendReportMail,
   notifyDueReopened,
@@ -567,3 +569,72 @@ module.exports = {
   runMonthlyReminder,
   sendOwnerNotification,
 };
+
+/* TÜFE kira artış önerisi: kira yılı dolmak üzere (ya da yeni doldu).
+   Kiracı + dönüm başına bir kez Telegram, bir kez e-posta; anahtarlar ayrı,
+   böylece biri başarısız olunca öteki tekrar gönderilmez. */
+const MONTH_LOCATIVE = ['Ocak\'ta', 'Şubat\'ta', 'Mart\'ta', 'Nisan\'da', 'Mayıs\'ta', 'Haziran\'da',
+  'Temmuz\'da', 'Ağustos\'ta', 'Eylül\'de', 'Ekim\'de', 'Kasım\'da', 'Aralık\'ta'];
+
+async function notifyRentIncreaseDue(suggestion) {
+  const [year, month, day] = String(suggestion.anniversary).split('-').map(Number);
+  const when = day + ' ' + MONTH_LOCATIVE[month - 1];
+  const verb = suggestion.daysUntil < 0 ? 'doldu' : 'doluyor';
+  const rateText = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(suggestion.rate);
+  const headline = suggestion.name + ' kira yılı ' + when + ' ' + verb + '. TÜFE %' + rateText +
+    ' (' + suggestion.rateLabel + ') ile önerilen yeni kira ' + formatCurrency(suggestion.suggestedRent) + '. Panelden onaylayın.';
+  const lines = [
+    '📅 Kira artış zamanı',
+    '',
+    headline,
+    '',
+    'Mevcut kira: ' + formatCurrency(suggestion.currentRent),
+    'Yasal tavan: ' + formatCurrency(suggestion.maxLegalRent),
+    suggestion.contractRateRent ? 'Sözleşmedeki %' + suggestion.contractRate + ' ile: ' + formatCurrency(suggestion.contractRateRent) : '',
+    suggestion.rateIsProvisional ? 'Not: ' + formatMonthYear(suggestion.expectedRateMonth, suggestion.expectedRateYear) + ' oranı henüz açıklanmadı, son açıklanan oran kullanıldı.' : '',
+    suggestion.allPaid ? 'Biten kira yılının 12 ayı da ödendi.' : 'Biten kira yılında ödenen ay: ' + suggestion.paidMonths + '/12',
+    suggestion.fiveYearNote ? 'Kiracılık 5 yılı doldurdu: kira hakkaniyete göre yeniden belirlenebilir (TBK 344/3).' : '',
+  ].filter((line, index) => line || index === 1 || index === 3);
+  const message = lines.join('\n');
+  const keyTail = suggestion.tenantId + ':' + year + '-' + String(month).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+  const metadata = { tenantId: suggestion.tenantId, anniversary: suggestion.anniversary, rate: suggestion.rate };
+
+  const telegram = await sendOwnerNotification({
+    key: 'rent-raise:' + keyTail,
+    type: 'rent_raise_due',
+    title: suggestion.name + ' · kira artış zamanı',
+    message,
+    metadata,
+  });
+
+  let email = { sent: false, reason: 'not_configured' };
+  if (isMailConfigured()) {
+    const mailKey = 'rent-raise-mail:' + keyTail;
+    let claimed = false;
+    try {
+      claimed = await claimNotification(mailKey, {
+        type: 'rent_raise_due',
+        title: suggestion.name + ' · kira artış zamanı',
+        message,
+        metadata,
+        channel: 'email',
+      });
+    } catch (error) {
+      console.error('E-posta bildirim kaydı oluşturulamadı:', error);
+    }
+    if (!claimed) {
+      email = { sent: false, skipped: true, reason: 'already_delivered' };
+    } else {
+      const { sendMail } = require('../utils/mailer');
+      email = await sendMail('Vedat Gayrimenkul · ' + suggestion.name + ' kira artış zamanı', message);
+      await Notification.updateOne(
+        { key: mailKey },
+        { $set: { status: email.sent ? 'sent' : 'failed', error: email.sent ? '' : (email.error || email.reason || ''), sentAt: email.sent ? new Date() : null } }
+      ).catch((error) => console.error('Bildirim durumu güncellenemedi:', error));
+    }
+  }
+
+  return { ...telegram, email };
+}
+
+module.exports.notifyRentIncreaseDue = notifyRentIncreaseDue;

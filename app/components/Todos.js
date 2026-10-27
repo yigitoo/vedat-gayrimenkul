@@ -13,6 +13,7 @@ import {
   Trash,
 } from "@phosphor-icons/react";
 import { apiRequest, formatDate, periodLabel } from "../lib/client";
+import { askConfirm } from "./Feedback";
 
 const WEEKDAYS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
 const DAY_MS = 86400000;
@@ -84,7 +85,13 @@ function Ring({ value, max, label, tone = "accent", size = 76 }) {
   );
 }
 
-function Countdown({ todo, now, onOpen }) {
+/* Saniye yalnız burada akar: her saniye bütün takvimi yeniden çizmesin. */
+function Countdown({ todo, onOpen }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
   const diff = new Date(todo.dueAt).getTime() - now;
   const part = splitDuration(diff);
   const tone = part.past ? "bad" : part.days === 0 ? "warn" : "accent";
@@ -126,7 +133,7 @@ export default function TodosView({ token, onFlash }) {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    const timer = window.setInterval(() => setNow(Date.now()), 30000);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -236,7 +243,8 @@ export default function TodosView({ token, onFlash }) {
   }
 
   async function remove(todo) {
-    if (!window.confirm(todo.title + " notu silinsin mi?")) return;
+    const ok = await askConfirm({ title: todo.title + " silinsin mi?", confirmLabel: "Sil", tone: "danger" });
+    if (!ok) return;
     setPending(todo.id);
     try {
       await apiRequest("/api/todos?id=" + todo.id, { method: "DELETE" }, token);
@@ -253,7 +261,7 @@ export default function TodosView({ token, onFlash }) {
     <div className="view" data-busy={loading} aria-busy={loading}>
       {featured ? (
         <div className={"countdown-strip" + (queue.length ? " has-queue" : "")}>
-          <Countdown todo={featured} now={now} onOpen={openTodo} />
+          <Countdown todo={featured} onOpen={openTodo} />
           {queue.length ? (
             <div className="countdown-queue">
               {queue.map((todo) => {

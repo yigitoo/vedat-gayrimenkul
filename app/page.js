@@ -26,12 +26,17 @@ import {
   MagnifyingGlass,
   Notebook,
   Moon,
+  Palette,
   PaperPlaneTilt,
   PencilSimple,
   Plus,
   Pulse,
   Receipt,
   ShieldCheck,
+  EnvelopeSimple,
+  Eye,
+  EyeSlash,
+  FilePdf,
   SignOut,
   SquaresFour,
   Sun,
@@ -77,12 +82,20 @@ import {
   monthName,
   normalizeSearch,
   periodLabel,
+  ACCENTS,
+  readAccent,
+  readPrivacy,
   readTheme,
   saveSession,
   statusDetail,
   statusView,
+  writeAccent,
+  writePrivacy,
   writeTheme,
 } from "./lib/client";
+import { ConfirmHost, Toast, askConfirm } from "./components/Feedback";
+import CommandPalette from "./components/CommandPalette";
+import { RaiseSheet, RaiseSuggestions } from "./components/Raises";
 
 const BRAND = "Vedat Gayrimenkul";
 
@@ -111,34 +124,56 @@ const MONTH_LONG = [
 ];
 
 const VIEWS = [
-  { id: "overview", label: "Özet", icon: SquaresFour, lead: "Dönemin tahsilat resmi ve sıradaki ödemeler.", primary: true },
-  { id: "calendar", label: "Takvim", icon: CalendarBlank, lead: "Hangi gün kimden ne bekleniyor.", primary: true },
-  { id: "payments", label: "Ödemeler", icon: Wallet, lead: "Dönem defteri: kim ödedi, kim gecikti.", primary: true },
-  { id: "tenants", label: "Kiracılar", icon: UsersThree, lead: "Sözleşmeler, kira tutarları ve dosyalar.", primary: true },
-  { id: "todos", label: "Yapılacaklar", icon: ListChecks, lead: "Güne not düş, saatine kadar geri sayım işlesin." },
-  { id: "dues", label: "Aidat", icon: Buildings, lead: "Apartman ve site aidatı: hangi ay ödendi." },
-  { id: "bus", label: "Otobüs", icon: Bus, lead: "Hat defteri: gün gün hasılat, mazot, yövmiye." },
-  { id: "ledger", label: "Gider notları", icon: Notebook, lead: "Her şeyden bağımsız harcamalar: gün gün, ay ay." },
-  { id: "reports", label: "Raporlar", icon: ChartLineUp, lead: "Aylara yayılan tahsilat, gider ve gündem." },
-  { id: "activity", label: "Akış", icon: Pulse, lead: "Son kayıtlar ve bildirim geçmişi." },
+  { id: "overview", label: "Özet", icon: SquaresFour, lead: "Dönemin tahsilat resmi ve sıradaki ödemeler.", primary: true, group: "Genel" },
+  { id: "calendar", label: "Takvim", icon: CalendarBlank, lead: "Hangi gün kimden ne bekleniyor.", primary: true, group: "Genel" },
+  { id: "payments", label: "Ödemeler", icon: Wallet, lead: "Yıl tablosu ve dönem defteri: kim ödedi, kim gecikti.", primary: true, group: "Kira" },
+  { id: "tenants", label: "Kiracılar", icon: UsersThree, lead: "Sözleşmeler, kira tutarları ve zam önerileri.", primary: true, group: "Kira" },
+  { id: "dues", label: "Aidat", icon: Buildings, lead: "Apartman ve site aidatı: hangi ay ödendi.", group: "Kira" },
+  { id: "bus", label: "Otobüs", icon: Bus, lead: "Hat defteri: gün gün hasılat, mazot, yövmiye.", group: "İşletme" },
+  { id: "ledger", label: "Gider notları", icon: Notebook, lead: "Her şeyden bağımsız harcamalar: gün gün, ay ay.", group: "İşletme" },
+  { id: "todos", label: "Yapılacaklar", icon: ListChecks, lead: "Güne not düş, saatine kadar geri sayım işlesin.", group: "Planlama" },
+  { id: "reports", label: "Raporlar", icon: ChartLineUp, lead: "Aylara yayılan tahsilat, gider ve aylık tam rapor.", group: "Planlama" },
+  { id: "activity", label: "Akış", icon: Pulse, lead: "Son kayıtlar ve bildirim geçmişi.", group: "Planlama" },
 ];
 
 const SETTINGS_VIEW = {
   id: "settings",
   label: "Ayarlar",
   icon: GearSix,
-  lead: "Bildirimlerin kime gideceğini buradan belirleyin.",
+  lead: "Bildirimler, TÜFE oranları ve oturum.",
 };
 
 const ALL_VIEWS = [...VIEWS, SETTINGS_VIEW];
 const PRIMARY_VIEWS = VIEWS.filter((item) => item.primary);
 const MORE_VIEWS = [...VIEWS.filter((item) => !item.primary), SETTINGS_VIEW];
+const NAV_GROUPS = VIEWS.reduce((groups, item) => {
+  const last = groups[groups.length - 1];
+  if (last && last.label === item.group) last.items.push(item);
+  else groups.push({ label: item.group, items: [item] });
+  return groups;
+}, []);
+
+/* Adres çubuğundaki ekran adı: geri tuşu ve paylaşılan bağlantı aynı yere döner. */
+const SCREEN_SLUGS = {
+  overview: "ozet",
+  calendar: "takvim",
+  payments: "odemeler",
+  tenants: "kiracilar",
+  dues: "aidat",
+  bus: "otobus",
+  ledger: "gidernotlari",
+  todos: "yapilacaklar",
+  reports: "raporlar",
+  activity: "akis",
+  settings: "ayarlar",
+};
 const TONE_ICON = { ok: CheckCircle, warn: Clock, bad: WarningCircle, calm: Clock };
 
 /* ---------- Giriş ---------- */
 
-function AuthGate({ onSubmit, error, busy }) {
+function AuthGate({ onSubmit, onVerify, onReset, challenge, error, busy }) {
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
 
   return (
     <main className="auth">
@@ -154,43 +189,406 @@ function AuthGate({ onSubmit, error, busy }) {
           aynı veriye bakar.
         </p>
 
-        <form
-          className="auth-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            onSubmit(password.trim());
-          }}
-        >
-          <div className="field">
-            <label htmlFor="panel-password">Panel şifresi</label>
-            <input
-              id="panel-password"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-            />
-          </div>
+        {challenge ? (
+          <form
+            className="auth-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              onVerify(code.replace(/\s+/g, ""));
+            }}
+          >
+            <div className="field">
+              <label htmlFor="panel-code">E-posta kodu</label>
+              <input
+                id="panel-code"
+                className="auth-code"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                value={code}
+                onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                autoFocus
+                required
+              />
+              <p className="auth-note">
+                <EnvelopeSimple weight="fill" />
+                6 haneli kod gönderildi: {challenge.sentTo}. 10 dakika geçerli.
+              </p>
+            </div>
 
-          {error ? (
-            <p className="form-error" role="alert">
-              <WarningCircle weight="fill" />
-              {error}
+            {error ? (
+              <p className="form-error" role="alert">
+                <WarningCircle weight="fill" />
+                {error}
+              </p>
+            ) : null}
+
+            <button
+              className={"btn btn-primary btn-wide" + (busy ? " is-busy" : "")}
+              type="submit"
+              disabled={busy || code.length !== 6}
+            >
+              Doğrula ve gir
+            </button>
+
+            <div className="auth-links">
+              <button
+                type="button"
+                className="btn btn-quiet"
+                disabled={busy}
+                onClick={() => {
+                  setCode("");
+                  onSubmit(password.trim());
+                }}
+              >
+                Yeni kod gönder
+              </button>
+              <button
+                type="button"
+                className="btn btn-quiet"
+                disabled={busy}
+                onClick={() => {
+                  setCode("");
+                  onReset();
+                }}
+              >
+                Şifreye dön
+              </button>
+            </div>
+          </form>
+        ) : (
+          <form
+            className="auth-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              onSubmit(password.trim());
+            }}
+          >
+            <div className="field">
+              <label htmlFor="panel-password">Panel şifresi</label>
+              <input
+                id="panel-password"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+              />
+            </div>
+
+            {error ? (
+              <p className="form-error" role="alert">
+                <WarningCircle weight="fill" />
+                {error}
+              </p>
+            ) : null}
+
+            <button className={"btn btn-primary btn-wide" + (busy ? " is-busy" : "")} type="submit" disabled={busy}>
+              Kod gönder
+            </button>
+
+            <p className="auth-note">
+              <ShieldCheck weight="fill" />
+              Her girişte e-postana ve Telegram&apos;a tek kullanımlık kod gelir; oturum 30 gün açık kalır.
             </p>
-          ) : null}
-
-          <button className={"btn btn-primary btn-wide" + (busy ? " is-busy" : "")} type="submit">
-            Panele gir
-          </button>
-
-          <p className="auth-note">
-            <ShieldCheck weight="fill" />
-            Bir kez gir, oturum 30 gün açık kalır.
-          </p>
-        </form>
+          </form>
+        )}
       </section>
     </main>
+  );
+}
+
+/* ---------- Renk paleti ----------
+   Üst şeritteki palet düğmesi küçük bir pencere açar: yedi yumuşak ton ve
+   açık/koyu seçimi. Dışarı tıklayınca ya da Esc ile kapanır. */
+
+function AccentPicker({ accent, theme, onAccent, onTheme }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    function onDown(event) {
+      if (!wrapRef.current?.contains(event.target)) setOpen(false);
+    }
+    function onKey(event) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="accent-wrap" ref={wrapRef}>
+      <button
+        className={"icon-btn topbar-accent" + (open ? " is-active" : "")}
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label="Renk paleti"
+        title="Renk paleti"
+      >
+        <Palette weight="bold" />
+      </button>
+      {open ? (
+        <div className="accent-pop" role="dialog" aria-label="Renk paleti">
+          <p className="eyebrow">Renk paleti</p>
+          <div className="accent-grid" role="radiogroup" aria-label="Vurgu rengi">
+            {ACCENTS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="radio"
+                aria-checked={accent === item.id}
+                className={"accent-swatch" + (accent === item.id ? " is-active" : "")}
+                style={{ "--sw": item.swatch }}
+                onClick={() => onAccent(item.id)}
+              >
+                <i />
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </div>
+          <div className="accent-row">
+            <button
+              className={"btn btn-sm " + (theme === "light" ? "btn-primary" : "btn-glass")}
+              type="button"
+              onClick={() => theme !== "light" && onTheme()}
+            >
+              <Sun weight="bold" />
+              Açık
+            </button>
+            <button
+              className={"btn btn-sm " + (theme === "dark" ? "btn-primary" : "btn-glass")}
+              type="button"
+              onClick={() => theme !== "dark" && onTheme()}
+            >
+              <Moon weight="bold" />
+              Koyu
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/* ---------- Aylık bütün rapor ----------
+   Bütün sekmeler tek PDF'te: kira, aidat, giderler, gider notları, otobüs
+   ve gündem. Her ayın 1'inde geçen ayınki kendiliğinden e-postayla gelir;
+   buradan istenen ay indirilir ya da hemen gönderilir. */
+
+function FullReportCard({ token, onFlash, onAuthError }) {
+  const [target, setTarget] = useState(() => {
+    const date = new Date();
+    date.setDate(1);
+    date.setMonth(date.getMonth() - 1);
+    return { month: date.getMonth() + 1, year: date.getFullYear() };
+  });
+  const [busy, setBusy] = useState("");
+
+  function shift(delta) {
+    const date = new Date(target.year, target.month - 1 + delta, 1);
+    setTarget({ month: date.getMonth() + 1, year: date.getFullYear() });
+  }
+
+  async function download() {
+    setBusy("pdf");
+    try {
+      await downloadFile(
+        "/api/reports?kind=full&month=" + target.month + "&year=" + target.year + "&format=pdf",
+        token,
+        "vedat-gayrimenkul-" + target.year + "-" + String(target.month).padStart(2, "0") + "-butun-rapor.pdf"
+      );
+      onFlash("ok", periodLabel(target) + " bütün raporu indirildi.");
+    } catch (error) {
+      if (error.status === 401) onAuthError();
+      else onFlash("bad", error.message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function email() {
+    setBusy("mail");
+    try {
+      const result = await apiRequest(
+        "/api/reports",
+        { method: "POST", body: JSON.stringify({ kind: "full", action: "email", month: target.month, year: target.year }) },
+        token
+      );
+      onFlash("ok", periodLabel(target) + " raporu " + (result.recipients || []).join(", ") + " adresine gönderildi.");
+    } catch (error) {
+      if (error.status === 401) onAuthError();
+      else onFlash("bad", "E-posta gönderilemedi: " + error.message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  return (
+    <article className="panel glass full-report">
+      <div className="full-report-copy">
+        <span className="raise-mark"><FilePdf weight="bold" /></span>
+        <div>
+          <p className="eyebrow">Aylık bütün rapor</p>
+          <h2>Her şey tek PDF&apos;te</h2>
+          <p className="muted">Kira, aidat, giderler, gider notları, otobüs ve gündem. Her ayın 1&apos;inde geçen ayınki e-postana gelir.</p>
+        </div>
+      </div>
+      <div className="full-report-actions">
+        <div className="period">
+          <button type="button" onClick={() => shift(-1)} aria-label="Önceki ay"><CaretLeft weight="bold" /></button>
+          <strong>{periodLabel(target)}</strong>
+          <button type="button" onClick={() => shift(1)} aria-label="Sonraki ay"><CaretRight weight="bold" /></button>
+        </div>
+        <button className={"btn btn-glass" + (busy === "mail" ? " is-busy" : "")} type="button" onClick={email} disabled={Boolean(busy)}>
+          <PaperPlaneTilt weight="bold" />
+          E-postala
+        </button>
+        <button className={"btn btn-primary" + (busy === "pdf" ? " is-busy" : "")} type="button" onClick={download} disabled={Boolean(busy)}>
+          <DownloadSimple weight="bold" />
+          PDF indir
+        </button>
+      </div>
+    </article>
+  );
+}
+
+/* ---------- Ayın nabzı ----------
+   Takvimin üstünde o ayın para resmi: beklenen, gelen, kalan, gider, net.
+   Takvimde ay değişince bu şerit de o aya döner. */
+
+function MonthPulse({ metrics, period }) {
+  const rate = Math.min(Math.max(metrics.collectionRate || 0, 0), 100);
+  const items = [
+    { key: "expected", label: "Beklenen kira", value: metrics.totalExpected, meta: metrics.tenantCount + " kiracı" },
+    { key: "received", label: "Tahsil edilen", value: metrics.totalReceived, meta: "%" + rate + " tamamlandı", tone: "ok" },
+    {
+      key: "outstanding",
+      label: "Kalan",
+      value: metrics.outstanding,
+      meta: metrics.overdueCount ? metrics.overdueCount + " geciken" : metrics.upcomingCount + " yaklaşan",
+      tone: metrics.overdueCount ? "bad" : "warn",
+    },
+    { key: "expense", label: "Gider", value: metrics.totalExpense, meta: "aidat dahil" },
+    { key: "net", label: "Net", value: metrics.netIncome, meta: "tahsilat − gider", tone: metrics.netIncome >= 0 ? "accent" : "bad" },
+  ];
+
+  return (
+    <section className="pulse" aria-label={periodLabel(period) + " özeti"}>
+      <div className="pulse-grid">
+        {items.map((item, index) => (
+          <div className={"pulse-item" + (item.tone ? " tone-" + item.tone : "")} key={item.key} style={{ "--i": index }}>
+            <span className="pulse-label">
+              <i aria-hidden="true" />
+              {item.label}
+            </span>
+            <strong className="num">{formatCurrency(item.value)}</strong>
+            <small>{item.meta}</small>
+          </div>
+        ))}
+      </div>
+      <div className="pulse-bar" role="img" aria-label={"Tahsilat oranı yüzde " + rate}>
+        <i style={{ width: rate + "%" }} />
+      </div>
+    </section>
+  );
+}
+
+/* ---------- TÜFE oranları ----------
+   Kira artış sınırı (12 aylık ortalama TÜFE) her ay kendiliğinden çekilir.
+   Burada son aylar görünür; bir ay eksik ya da hatalıysa elle girilir. */
+
+const CPI_MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+const CPI_SOURCE = { seed: "kayıtlı", web: "otomatik", manual: "elle" };
+
+function CpiPanel({ raises, token, onSaved, onError }) {
+  const rates = (raises?.rates || []).slice(0, 12);
+  const latest = raises?.latest;
+  const next = latest
+    ? new Date(latest.year, latest.month, 1)
+    : new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1);
+  const [form, setForm] = useState({ year: next.getFullYear(), month: next.getMonth() + 1, rate: "" });
+  const [saving, setSaving] = useState(false);
+
+  async function save(event) {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      const result = await apiRequest(
+        "/api/rent-increases",
+        { method: "PUT", body: JSON.stringify({ year: Number(form.year), month: Number(form.month), rate: form.rate }) },
+        token
+      );
+      onSaved(result, CPI_MONTHS[form.month - 1] + " " + form.year + " oranı kaydedildi.");
+      setForm((current) => ({ ...current, rate: "" }));
+    } catch (error) {
+      onError(error.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <article className="panel glass cpi-panel">
+      <div className="panel-head">
+        <div>
+          <p className="eyebrow">Kira artış sınırı</p>
+          <h2>TÜFE 12 aylık ortalama</h2>
+        </div>
+        {latest ? (
+          <span className="raise-rate">
+            %{Number(latest.rate).toLocaleString("tr-TR")}
+            <small>{CPI_MONTHS[latest.month - 1]} {latest.year}</small>
+          </span>
+        ) : null}
+      </div>
+      <p className="muted cpi-copy">
+        Oran her ayın 3&apos;ünde TÜİK açıklayınca kendiliğinden eklenir; kira yılı dolan kiracı için zam önerisi bu orandan hesaplanır.
+      </p>
+      {rates.length ? (
+        <div className="cpi-grid">
+          {rates.map((item) => (
+            <div className="cpi-cell" key={item.year + "-" + item.month}>
+              <span>{CPI_MONTHS[item.month - 1].slice(0, 3)} {String(item.year).slice(2)}</span>
+              <strong className="num">%{Number(item.rate).toLocaleString("tr-TR")}</strong>
+              <small className={"cpi-src is-" + item.source}>{CPI_SOURCE[item.source] || item.source}</small>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="chips-empty">Oranlar yükleniyor…</p>
+      )}
+      <form className="cpi-form" onSubmit={save}>
+        <div className="field">
+          <label htmlFor="cpi-month">Ay</label>
+          <select id="cpi-month" value={form.month} onChange={(event) => setForm({ ...form, month: Number(event.target.value) })}>
+            {CPI_MONTHS.map((label, index) => (
+              <option key={label} value={index + 1}>{label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="cpi-year">Yıl</label>
+          <input id="cpi-year" type="number" inputMode="numeric" value={form.year} onChange={(event) => setForm({ ...form, year: event.target.value })} />
+        </div>
+        <div className="field">
+          <label htmlFor="cpi-rate">Oran (%)</label>
+          <input id="cpi-rate" type="text" inputMode="decimal" placeholder="31,49" value={form.rate} onChange={(event) => setForm({ ...form, rate: event.target.value })} required />
+        </div>
+        <button className={"btn btn-glass" + (saving ? " is-busy" : "")} type="submit" disabled={saving}>
+          Elle kaydet
+        </button>
+      </form>
+    </article>
   );
 }
 
@@ -243,7 +641,7 @@ function Empty({ icon: Glyph, title, hint }) {
 
 /* ---------- Özet ---------- */
 
-function OverviewView({ data, busy, onGoCalendar, onPay, onOpenTenant, onGoReports }) {
+function OverviewView({ data, busy, raises, onRaise, onGoCalendar, onPay, onOpenTenant, onGoReports }) {
   const metrics = data.metrics;
   const statuses = data.statuses || [];
   const total = Math.max(metrics.tenantCount, 1);
@@ -292,6 +690,8 @@ function OverviewView({ data, busy, onGoCalendar, onPay, onOpenTenant, onGoRepor
           meta={formatCurrency(metrics.totalExpense) + " gider düşüldü"}
         />
       </div>
+
+      <RaiseSuggestions raises={raises} onOpen={onRaise} />
 
       {agenda.length ? (
         <article className="glass alert-strip">
@@ -548,6 +948,8 @@ function TenantsView({
   onDeleteArchived,
   onUndelete,
   onOpen,
+  raises,
+  onRaise,
 }) {
   const normalize = (value) => value.toLocaleLowerCase("tr-TR");
   const needle = normalize(query.trim());
@@ -610,6 +1012,8 @@ function TenantsView({
           </button>
         </div>
       </div>
+
+      {showArchived ? null : <RaiseSuggestions raises={raises} onOpen={onRaise} compact />}
 
       {/* Arşiv ayrı görünüm: aktif liste ile aynı anda gösterilmez, karışmaz. */}
       {showArchived ? (
@@ -865,6 +1269,7 @@ export default function Page() {
   const [session, setSession] = useState(null);
   const [authError, setAuthError] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
+  const [authChallenge, setAuthChallenge] = useState(null);
 
   const [period, setPeriod] = useState({ month: 0, year: 0 });
   const [data, setData] = useState(null);
@@ -897,6 +1302,12 @@ export default function Page() {
   const [savingSettings, setSavingSettings] = useState(false);
   const [stuck, setStuck] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [privacy, setPrivacy] = useState(false);
+  const [accent, setAccent] = useState("mavi");
+  const [bootError, setBootError] = useState("");
+  const [bootStamp, setBootStamp] = useState(0);
+  const [raises, setRaises] = useState(null);
+  const [raiseStamp, setRaiseStamp] = useState(0);
 
   const [tenantQuery, setTenantQuery] = useState("");
   const [showArchived, setShowArchived] = useState(false);
@@ -931,11 +1342,26 @@ export default function Page() {
     setDuesYear(currentPeriod().year);
     setBusPeriod(currentPeriod());
     setTheme(readTheme());
+    setPrivacy(readPrivacy());
+    setAccent(readAccent());
     setBooted(true);
 
     const params = new URLSearchParams(window.location.search);
     const screen = screenId(params.get("ekran"));
     if (screen && ALL_VIEWS.some((item) => item.id === screen)) setView(screen);
+    // Ana ekran kısayolu: "Ödeme ekle" doğrudan ödeme penceresini açar.
+    if (params.get("islem") === "odeme") setModal({ type: "payment" });
+    window.history.replaceState({ view: screen && ALL_VIEWS.some((item) => item.id === screen) ? screen : "overview" }, "");
+
+    const onPop = (event) => {
+      const next = event.state?.view || screenId(new URLSearchParams(window.location.search).get("ekran")) || "overview";
+      if (ALL_VIEWS.some((item) => item.id === next)) {
+        setView(next);
+        setMoreOpen(false);
+        setModal(null);
+      }
+    };
+    window.addEventListener("popstate", onPop);
 
     const onInstall = (event) => {
       event.preventDefault();
@@ -943,7 +1369,30 @@ export default function Page() {
     };
     window.addEventListener("beforeinstallprompt", onInstall);
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
-    return () => window.removeEventListener("beforeinstallprompt", onInstall);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onInstall);
+      window.removeEventListener("popstate", onPop);
+    };
+  }, []);
+
+  /* Klavye: ⌘K / Ctrl+K ya da "/" aramayı açar, ⌘⇧H tutarları gizler. */
+  useEffect(() => {
+    function onKey(event) {
+      const typing = event.target.closest?.("input, textarea, select, [contenteditable='true']");
+      const mod = event.metaKey || event.ctrlKey;
+      if (mod && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setMoreOpen((open) => !open);
+      } else if (mod && event.shiftKey && event.key.toLowerCase() === "h") {
+        event.preventDefault();
+        togglePrivacyRef.current();
+      } else if (!typing && !mod && event.key === "/") {
+        event.preventDefault();
+        setMoreOpen(true);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   // Kaydırma dinleyicisi yerine gözlemci: her karede iş yapmaz.
@@ -986,12 +1435,16 @@ export default function Page() {
       .then((payload) => {
         if (cancelled) return;
         setData(payload);
+        setBootError("");
         setAuthError("");
       })
       .catch((error) => {
         if (cancelled) return;
         if (error.status === 401) signOut("Oturum süresi doldu, tekrar giriş yapın.");
-        else setFlash({ tone: "bad", message: error.message });
+        else {
+          setBootError(error.message || "Sunucuya ulaşılamadı.");
+          setFlash({ tone: "bad", message: error.message });
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -999,7 +1452,23 @@ export default function Page() {
     return () => {
       cancelled = true;
     };
-  }, [token, period.month, period.year, fetchDashboard, signOut]);
+  }, [token, period.month, period.year, bootStamp, fetchDashboard, signOut]);
+
+  // Zam önerileri: kira yılı dolan kiracılar için TÜFE'ye göre öneri.
+  useEffect(() => {
+    if (!token) return undefined;
+    let cancelled = false;
+    apiRequest("/api/rent-increases", {}, token)
+      .then((payload) => {
+        if (!cancelled) setRaises(payload);
+      })
+      .catch(() => {
+        if (!cancelled) setRaises(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, raiseStamp]);
 
   // Yıl çizelgesi yalnız ödeme ekranı açıkken ve o sekmede çekilir.
   useEffect(() => {
@@ -1134,11 +1603,6 @@ export default function Page() {
     data,
   ]);
 
-  useEffect(() => {
-    if (!flash) return undefined;
-    const timer = window.setTimeout(() => setFlash(null), 4200);
-    return () => window.clearTimeout(timer);
-  }, [flash]);
 
   async function authenticate(password) {
     if (!password) {
@@ -1152,12 +1616,35 @@ export default function Page() {
         method: "POST",
         body: JSON.stringify({ password }),
       });
+      setAuthChallenge({ id: result.challengeId, sentTo: result.sentTo });
+    } catch (error) {
+      setAuthError(error.status === 401 ? "Şifre hatalı." : error.message);
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function verifyCode(code) {
+    if (!authChallenge) return;
+    if (!/^\d{6}$/.test(code)) {
+      setAuthError("6 haneli kodu yazın.");
+      return;
+    }
+    setAuthBusy(true);
+    setAuthError("");
+    try {
+      const result = await apiRequest("/api/session", {
+        method: "POST",
+        body: JSON.stringify({ challengeId: authChallenge.id, code }),
+      });
       const next = { token: result.token, expiresAt: result.expiresAt };
       saveSession(next);
+      setAuthChallenge(null);
       setPeriod(currentPeriod());
       setSession(next);
     } catch (error) {
-      setAuthError(error.status === 401 ? "Şifre hatalı." : error.message);
+      setAuthError(error.message);
+      if (error.status === 410) setAuthChallenge(null);
     } finally {
       setAuthBusy(false);
     }
@@ -1182,9 +1669,15 @@ export default function Page() {
   }
 
   function goTo(next) {
-    setView(next);
     setMoreOpen(false);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (next !== view) {
+      const params = new URLSearchParams(window.location.search);
+      params.delete("islem");
+      params.set("ekran", SCREEN_SLUGS[next] || next);
+      window.history.pushState({ view: next }, "", "?" + params.toString());
+    }
+    setView(next);
+    window.scrollTo({ top: 0, behavior: "auto" });
   }
 
   async function handleSaved(message) {
@@ -1217,7 +1710,12 @@ export default function Page() {
   }
 
   async function archiveTenant(tenant) {
-    if (!window.confirm(tenant.name + " arşivlensin mi? Ödeme geçmişi korunur.")) return;
+    const ok = await askConfirm({
+      title: tenant.name + " arşivlensin mi?",
+      message: "Ödeme geçmişi korunur; kiracı toplamlara girmez. İstediğin zaman arşivden geri alabilirsin.",
+      confirmLabel: "Arşivle",
+    });
+    if (!ok) return;
     try {
       await apiRequest("/api/tenants?id=" + tenant.id, { method: "DELETE" }, token);
       setFlash({ tone: "ok", message: "Kiracı arşivlendi." });
@@ -1240,9 +1738,13 @@ export default function Page() {
   }
 
   async function deleteArchivedTenant(tenant) {
-    if (!window.confirm(
-      tenant.name + " silinsin mi? 15 gün boyunca Silinenler'de durur, bu sürede geri getirebilirsin. Sonra ödeme, gider ve aidat geçmişiyle birlikte kalıcı olarak silinir."
-    )) return;
+    const ok = await askConfirm({
+      title: tenant.name + " silinsin mi?",
+      message: "15 gün Silinenler'de bekler, bu sürede geri getirebilirsin. Sonra ödeme, gider ve aidat geçmişiyle birlikte kalıcı olarak silinir.",
+      confirmLabel: "Sil",
+      tone: "danger",
+    });
+    if (!ok) return;
     try {
       await apiRequest(
         "/api/tenants?id=" + tenant.id + "&action=purge",
@@ -1334,13 +1836,29 @@ export default function Page() {
         },
         token
       );
+      const paymentId = result.payment?.id;
       setFlash({
         tone: "ok",
         message: result.skipped
           ? label + " zaten ödenmiş görünüyor."
-          : label + " · " + formatCurrency(result.payment.amount) + " ödendi olarak işaretlendi.",
+          : row.name + " · " + label + " ödendi.",
+        action: result.skipped || !paymentId
+          ? null
+          : {
+              label: "Geri al",
+              run: async () => {
+                try {
+                  await apiRequest("/api/payments?id=" + paymentId, { method: "DELETE" }, token);
+                  setGridStamp((value) => value + 1);
+                  await reload();
+                } catch (error) {
+                  setFlash({ tone: "bad", message: error.message });
+                }
+              },
+            },
       });
       setGridStamp((value) => value + 1);
+      setRaiseStamp((value) => value + 1);
       await reload();
     } catch (error) {
       setFlash({ tone: "bad", message: error.message });
@@ -1394,7 +1912,13 @@ export default function Page() {
   }
 
   async function deleteDue(row) {
-    if (!window.confirm(row.title + " silinsin mi? Geçmiş aidat gider kayıtları durur.")) return;
+    const ok = await askConfirm({
+      title: row.title + " silinsin mi?",
+      message: "Geçmiş aidat gider kayıtları durur; yalnız bu kalem takipten çıkar.",
+      confirmLabel: "Sil",
+      tone: "danger",
+    });
+    if (!ok) return;
     try {
       await apiRequest("/api/recurrences?id=" + row.dueId, { method: "DELETE" }, token);
       setFlash({ tone: "ok", message: "Aidat kalemi silindi." });
@@ -1520,6 +2044,15 @@ export default function Page() {
     writeTheme(next);
   }
 
+  function togglePrivacy() {
+    const next = !privacy;
+    writePrivacy(next);
+    setPrivacy(next);
+    setFlash({ tone: "ok", message: next ? "Tutarlar gizlendi." : "Tutarlar görünüyor." });
+  }
+  const togglePrivacyRef = useRef(togglePrivacy);
+  togglePrivacyRef.current = togglePrivacy;
+
   // Kiracıların katılım yılından bu yana geçen yıllar seçilebilir olsun.
   const reportYears = useMemo(() => {
     const thisYear = new Date().getFullYear();
@@ -1548,7 +2081,17 @@ export default function Page() {
     return (
       <>
         <div className="ambient" />
-        <AuthGate onSubmit={authenticate} error={authError} busy={authBusy} />
+        <AuthGate
+          onSubmit={authenticate}
+          onVerify={verifyCode}
+          onReset={() => {
+            setAuthChallenge(null);
+            setAuthError("");
+          }}
+          challenge={authChallenge}
+          error={authError}
+          busy={authBusy}
+        />
       </>
     );
   }
@@ -1559,95 +2102,113 @@ export default function Page() {
         <div className="ambient" />
         <div className="boot">
           <img src="/icons/vedat-mark.svg" alt="" width="48" height="48" />
-          <p>Panel hazırlanıyor</p>
+          {bootError ? (
+            <div className="boot-error" role="alert">
+              <strong>Panel açılamadı</strong>
+              <span>{bootError}</span>
+              <div className="boot-actions">
+                <button className="btn btn-primary" type="button" onClick={() => setBootStamp((value) => value + 1)}>
+                  <ArrowClockwise weight="bold" />
+                  Tekrar dene
+                </button>
+                <button className="btn btn-quiet" type="button" onClick={() => signOut("")}>
+                  Çıkış yap
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p>Panel hazırlanıyor</p>
+          )}
         </div>
+        {flash ? <Toast flash={flash} onClose={() => setFlash(null)} /> : null}
       </>
     );
   }
 
   const metrics = data.metrics;
   const active = ALL_VIEWS.find((item) => item.id === view) || VIEWS[0];
-  const showPeriod = ["overview", "calendar"].includes(view) ||
+  // Takvimin kendi ay gezgini var; üstte ikincisi gösterilmez.
+  const showPeriod = view === "overview" ||
     (view === "payments" && paymentTab === "period");
   const attention = metrics.overdueCount + metrics.partialCount;
+  const raiseCount = raises?.suggestions?.length || 0;
   const sessionEnds = session.expiresAt ? formatShortDate(session.expiresAt, true) : "";
   const moreActive = MORE_VIEWS.some((item) => item.id === view);
+  const anyLoading = loading || gridLoading || duesLoading || busLoading || reportLoading;
+  const badgeFor = (id) => (id === "payments" ? attention : id === "tenants" ? raiseCount : 0);
+  const PrivacyGlyph = privacy ? EyeSlash : Eye;
 
   return (
     <>
       <div className="ambient" />
+      <div className={"loadbar" + (anyLoading ? " is-on" : "")} aria-hidden="true" />
 
       <div className="shell">
-        <aside className="rail">
+        <aside className="rail" aria-label="Ana menü">
           <div className="rail-brand">
             <img src="/icons/vedat-mark.svg" alt="" width="36" height="36" />
             <strong>{BRAND}</strong>
           </div>
 
+          <button type="button" className="rail-search" onClick={() => setMoreOpen(true)} aria-label="Ara (⌘K)">
+            <MagnifyingGlass weight="bold" />
+            <span>Ara</span>
+            <kbd>⌘K</kbd>
+          </button>
+
           <nav className="rail-nav" aria-label="Bölümler">
-            {VIEWS.map((item) => {
-              const Glyph = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={"rail-link" + (view === item.id ? " is-active" : "")}
-                  onClick={() => goTo(item.id)}
-                  aria-current={view === item.id ? "page" : undefined}
-                >
-                  <Glyph weight={view === item.id ? "fill" : "regular"} />
-                  {item.label}
-                  {item.id === "payments" && attention ? (
-                    <span className="rail-count num">{attention}</span>
-                  ) : null}
-                </button>
-              );
-            })}
+            {NAV_GROUPS.map((group) => (
+              <div className="rail-group" key={group.label}>
+                <p className="rail-group-title">{group.label}</p>
+                {group.items.map((item) => {
+                  const Glyph = item.icon;
+                  const badge = badgeFor(item.id);
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={"rail-link" + (view === item.id ? " is-active" : "")}
+                      onClick={() => goTo(item.id)}
+                      aria-current={view === item.id ? "page" : undefined}
+                      title={item.label}
+                    >
+                      <Glyph weight={view === item.id ? "fill" : "regular"} />
+                      <span className="rail-label">{item.label}</span>
+                      {badge ? (
+                        <span className={"rail-count num" + (item.id === "tenants" ? " is-warn" : "")}>{badge}</span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
           </nav>
 
           <div className="rail-foot">
-            <p className="rail-foot-title">Bildirim hedefleri</p>
             <button
               type="button"
-              className={"rail-status is-action " + (data.integrations.telegram ? "is-ok" : "is-off")}
-              onClick={() => goTo("settings")}
+              className={"rail-link rail-privacy" + (privacy ? " is-on" : "")}
+              onClick={togglePrivacy}
+              aria-pressed={privacy}
+              title="Tutarları gizle (⌘⇧H)"
             >
-              <PaperPlaneTilt weight="fill" />
-              <span>
-                Telegram
-                <small>
-                  {data.integrations.telegram
-                    ? data.settings.telegramChatIds.length + " hedef"
-                    : "hedef yok"}
-                </small>
-              </span>
-              <CaretRight weight="bold" />
+              <PrivacyGlyph weight={privacy ? "fill" : "regular"} />
+              <span className="rail-label">Tutarları gizle</span>
+              <span className="switch" aria-hidden="true"><i /></span>
             </button>
             <button
               type="button"
-              className={"rail-status is-action " + (data.integrations.email ? "is-ok" : "is-off")}
-              onClick={() => goTo("settings")}
-            >
-              <Envelope weight="fill" />
-              <span>
-                E-posta
-                <small>
-                  {data.integrations.email
-                    ? data.settings.emailRecipients.length + " alıcı"
-                    : "alıcı yok"}
-                </small>
-              </span>
-              <CaretRight weight="bold" />
-            </button>
-            <button
-              type="button"
-              className={"rail-status is-action" + (view === "settings" ? " is-active" : "")}
+              className={"rail-link" + (view === "settings" ? " is-active" : "")}
               onClick={() => goTo("settings")}
               aria-current={view === "settings" ? "page" : undefined}
+              title="Ayarlar"
             >
-              <GearSix weight="fill" />
-              <span>Ayarlar<small>Oturum {sessionEnds}</small></span>
-              <CaretRight weight="bold" />
+              <GearSix weight={view === "settings" ? "fill" : "regular"} />
+              <span className="rail-label">Ayarlar</span>
+            </button>
+            <button type="button" className="rail-link" onClick={() => signOut("")} title="Çıkış yap">
+              <SignOut weight="regular" />
+              <span className="rail-label">Çıkış<small>Oturum {sessionEnds}</small></span>
             </button>
           </div>
         </aside>
@@ -1657,13 +2218,13 @@ export default function Page() {
 
           <header className={"topbar" + (stuck ? " is-stuck" : "")}>
             <div className="topbar-title">
-              <strong>{active.label}</strong>
+              <h1>{active.label}</h1>
               <span>{active.lead}</span>
             </div>
 
             <div className="topbar-actions">
               {showPeriod ? (
-                <div className="period glass glass--chip topbar-period">
+                <div className="period topbar-period">
                   <button type="button" onClick={() => shiftPeriod(-1)} aria-label="Önceki dönem">
                     <CaretLeft weight="bold" />
                   </button>
@@ -1689,34 +2250,54 @@ export default function Page() {
               ) : null}
 
               <button
-                className={"icon-btn topbar-settings" + (view === "settings" ? " is-active" : "")}
+                className="icon-btn topbar-search"
                 type="button"
-                onClick={() => goTo("settings")}
-                aria-label="Ayarlar"
+                onClick={() => setMoreOpen(true)}
+                aria-label="Ara"
               >
-                <GearSix weight={view === "settings" ? "fill" : "bold"} />
+                <MagnifyingGlass weight="bold" />
               </button>
+              <button
+                className={"icon-btn topbar-privacy" + (privacy ? " is-active" : "")}
+                type="button"
+                onClick={togglePrivacy}
+                aria-pressed={privacy}
+                aria-label={privacy ? "Tutarları göster" : "Tutarları gizle"}
+                title={privacy ? "Tutarları göster (⌘⇧H)" : "Tutarları gizle (⌘⇧H)"}
+              >
+                <PrivacyGlyph weight={privacy ? "fill" : "bold"} />
+              </button>
+              <AccentPicker
+                accent={accent}
+                theme={theme}
+                onAccent={(next) => {
+                  setAccent(next);
+                  writeAccent(next);
+                }}
+                onTheme={toggleTheme}
+              />
               <button
                 className="icon-btn topbar-theme"
                 type="button"
                 onClick={toggleTheme}
                 aria-label={theme === "dark" ? "Açık temaya geç" : "Koyu temaya geç"}
+                title={theme === "dark" ? "Açık tema" : "Koyu tema"}
               >
-                {theme === "dark" ? <Sun weight="fill" /> : <Moon weight="fill" />}
+                {theme === "dark" ? <Sun weight="bold" /> : <Moon weight="bold" />}
               </button>
-              <button className="icon-btn topbar-refresh" type="button" onClick={reload} aria-label="Verileri yenile">
+              <button className="icon-btn topbar-refresh" type="button" onClick={() => { reload(); setRaiseStamp((value) => value + 1); }} aria-label="Verileri yenile" title="Yenile">
                 <ArrowClockwise weight="bold" />
-              </button>
-              <button className="icon-btn topbar-signout" type="button" onClick={() => signOut("")} aria-label="Çıkış yap">
-                <SignOut weight="bold" />
               </button>
             </div>
           </header>
 
+          <div className="screen" key={view + (privacy ? ":gizli" : "")}>
           {view === "overview" ? (
             <OverviewView
               data={data}
               busy={loading}
+              raises={raises}
+              onRaise={(suggestion) => setModal({ type: "raise", suggestion })}
               onGoCalendar={() => goTo("calendar")}
               onGoReports={() => goTo("reports")}
               onPay={(tenantId) => setModal({ type: "payment", tenantId })}
@@ -1726,6 +2307,7 @@ export default function Page() {
 
           {view === "calendar" ? (
             <div className="view" data-busy={loading} aria-busy={loading}>
+              <MonthPulse metrics={data.metrics} period={data.period} />
               <CalendarBoard
                 period={data.period}
                 statuses={data.statuses || []}
@@ -1855,7 +2437,13 @@ export default function Page() {
               onDeleteArchived={deleteArchivedTenant}
               onUndelete={undeleteTenant}
               onOpen={(tenant) => setModal({ type: "detail", tenant })}
+              raises={raises}
+              onRaise={(suggestion) => setModal({ type: "raise", suggestion })}
             />
+          ) : null}
+
+          {view === "reports" ? (
+            <FullReportCard token={token} onFlash={notify} onAuthError={() => signOut("Oturum süresi doldu, tekrar giriş yapın.")} />
           ) : null}
 
           {view === "reports" ? (
@@ -1923,12 +2511,40 @@ export default function Page() {
               onRun={runAction}
             />
           ) : null}
+
+          {view === "settings" ? (
+            <CpiPanel
+              raises={raises}
+              token={token}
+              onSaved={(result, message) => {
+                setRaises((current) => ({ ...(current || {}), ...result }));
+                setFlash({ tone: "ok", message });
+              }}
+              onError={(message) => setFlash({ tone: "bad", message })}
+            />
+          ) : null}
+
+          {view === "settings" ? (
+            <article className="panel glass session-card">
+              <div>
+                <p className="eyebrow">Oturum</p>
+                <h2>Bu cihazda açık</h2>
+                <p className="muted">Oturum {sessionEnds} tarihine kadar açık kalır. Her yeni girişte e-postana kod gelir.</p>
+              </div>
+              <button className="btn btn-glass" type="button" onClick={() => signOut("")}>
+                <SignOut weight="bold" />
+                Çıkış yap
+              </button>
+            </article>
+          ) : null}
+          </div>
         </main>
       </div>
 
-      <nav className="tabbar glass glass--chip" aria-label="Bölümler">
+      <nav className="tabbar" aria-label="Bölümler">
         {PRIMARY_VIEWS.map((item) => {
           const Glyph = item.icon;
+          const badge = badgeFor(item.id);
           return (
             <button
               key={item.id}
@@ -1939,6 +2555,7 @@ export default function Page() {
             >
               <Glyph weight={view === item.id ? "fill" : "regular"} />
               {item.label}
+              {badge ? <span className="tab-dot" aria-label={badge + " bekleyen"} /> : null}
             </button>
           );
         })}
@@ -1954,9 +2571,13 @@ export default function Page() {
       </nav>
 
       {moreOpen ? (
-        <ActionsScreen
+        <CommandPalette
           views={ALL_VIEWS}
+          actions={QUICK_ACTIONS}
+          tenants={tenants}
           current={view}
+          privacy={privacy}
+          theme={theme}
           onClose={() => setMoreOpen(false)}
           onGo={goTo}
           onAction={(next) => {
@@ -1966,16 +2587,39 @@ export default function Page() {
               setModal(next.modal.type === "recurrence" ? { ...next.modal, day: new Date().getDate() } : next.modal);
             }
           }}
+          onOpenTenant={(tenant) => {
+            setMoreOpen(false);
+            setModal({ type: "detail", tenant });
+          }}
+          onPayTenant={(tenantId) => {
+            setMoreOpen(false);
+            setModal({ type: "payment", tenantId });
+          }}
+          onTogglePrivacy={() => {
+            setMoreOpen(false);
+            togglePrivacy();
+          }}
+          onToggleTheme={toggleTheme}
         />
       ) : null}
 
-      {flash ? (
-        <div className={"toast glass glass--chip is-" + flash.tone} role="status">
-          {flash.tone === "ok" ? <CheckCircle weight="fill" /> : <WarningCircle weight="fill" />}
-          <strong>{flash.message}</strong>
-        </div>
-      ) : null}
+      {flash ? <Toast flash={flash} onClose={() => setFlash(null)} /> : null}
+      <ConfirmHost />
 
+      {modal?.type === "raise" ? (
+        <RaiseSheet
+          suggestion={modal.suggestion}
+          token={token}
+          onClose={() => setModal(null)}
+          onDone={async (result, message) => {
+            setModal(null);
+            if (result) setRaises((current) => ({ ...(current || {}), ...result }));
+            setRaiseStamp((value) => value + 1);
+            setFlash({ tone: "ok", message });
+            await reload();
+          }}
+        />
+      ) : null}
       {modal?.type === "tenant" ? (
         <TenantSheet
           mode={modal.mode}
@@ -2135,104 +2779,6 @@ const QUICK_ACTIONS = [
   { id: "reports", label: "Rapor al", icon: ChartLineUp, view: "reports", keywords: "pdf excel indir" },
 ];
 
-function ActionsScreen({ views, current, onClose, onGo, onAction }) {
-  const [query, setQuery] = useState("");
-  const needle = normalizeSearch(query);
-  const actions = QUICK_ACTIONS.filter((item) => matchesSearch(needle, item.label, item.keywords));
-  const sections = views.filter((item) => matchesSearch(needle, item.label, item.lead));
-
-  useEffect(() => {
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKey = (event) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = overflow;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [onClose]);
-
-  return (
-    <div className="actions-screen" role="dialog" aria-modal="true" aria-label="Tüm işlemler">
-      <div className="actions-head">
-        <div>
-          <p className="eyebrow">{BRAND}</p>
-          <h2>Tüm işlemler</h2>
-        </div>
-        <button className="icon-btn" type="button" onClick={onClose} aria-label="Kapat">
-          <X weight="bold" />
-        </button>
-      </div>
-
-      <div className="search actions-search">
-        <MagnifyingGlass weight="bold" />
-        <input
-          type="search"
-          value={query}
-          placeholder="İşlem ya da bölüm ara"
-          aria-label="İşlem ara"
-          onChange={(event) => setQuery(event.target.value)}
-        />
-      </div>
-
-      <div className="actions-body">
-        {actions.length ? (
-          <section>
-            <p className="strip-title">Hızlı işlemler</p>
-            <div className="actions-grid">
-              {actions.map((item) => {
-                const Glyph = item.icon;
-                return (
-                  <button key={item.id} type="button" className="action-tile" onClick={() => onAction(item)}>
-                    <span className="action-mark"><Glyph weight="fill" /></span>
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-        ) : null}
-
-        {sections.length ? (
-          <section>
-            <p className="strip-title">Bölümler</p>
-            <div className="more-list">
-              {sections.map((item) => {
-                const Glyph = item.icon;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={"more-item" + (current === item.id ? " is-active" : "")}
-                    onClick={() => onGo(item.id)}
-                    aria-current={current === item.id ? "page" : undefined}
-                  >
-                    <span className="more-mark"><Glyph weight="fill" /></span>
-                    <span className="more-copy">
-                      <strong>{item.label}</strong>
-                      <small>{item.lead}</small>
-                    </span>
-                    <CaretRight weight="bold" />
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-        ) : null}
-
-        {!actions.length && !sections.length ? (
-          <div className="empty">
-            <MagnifyingGlass weight="duotone" />
-            <strong>Sonuç yok</strong>
-            <span>Başka bir kelimeyle deneyin.</span>
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
 
 /* Ana ekran kısayolları Türkçe adlarla geliyor */
 function screenId(value) {

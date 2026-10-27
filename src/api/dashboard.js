@@ -46,7 +46,8 @@ module.exports = async (req, res) => {
       .limit(12)
       .lean();
 
-    const totalExpected = tenants.reduce((sum, tenant) => sum + tenant.rentAmount, 0);
+    // Ayın beklenen kirası kira geçmişinden gelir; ileri tarihli zam bu ayı şişirmez.
+    const totalExpected = statuses.reduce((sum, item) => sum + item.expected, 0);
     const totalReceived = payments.reduce((sum, payment) => sum + payment.amount, 0);
     const paidCount = statuses.filter((item) => item.paid).length;
     const partialCount = statuses.filter((item) => item.partial).length;

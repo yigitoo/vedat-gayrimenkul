@@ -25,11 +25,15 @@ module.exports = async (req, res) => {
       runDailyReminder(),
       runMonthlyReminder(),
     ]);
+    // Ayın 1'inde geçen ayın bütün raporu PDF ekiyle e-postaya gider.
+    // Ay başı e-postası artık budur; Telegram'daki ay özeti yerinde duruyor.
+    const fullReport = await require('../services/monthlyReport').runFullMonthlyReport();
 
     // Silinenler'de 15 günü dolan kiracılar ve kayıtları kalıcı olarak gider.
     const trash = await purgeExpiredTenants();
 
-    return res.status(200).json({ recurring, due, daily, monthly, trash });
+    const rentIncrease = await require('../services/rentIncreases').runRentIncreaseCheck();
+    return res.status(200).json({ recurring, due, daily, monthly, fullReport, trash, rentIncrease });
   } catch (error) {
     console.error('Cron error:', error);
     return res.status(500).json({ error: error.message });

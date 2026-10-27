@@ -1,4 +1,4 @@
-const { Schema, model } = require('mongoose');
+const { Schema, model, models } = require('mongoose');
 
 /* Yapılacaklar defteri. Kira, gider ya da kiracıyla bağı yok; takvimdeki
    bir güne düşülen hatırlatma. Saati olduğu için geri sayım buna kurulur. */
@@ -10,4 +10,5 @@ const todoSchema = new Schema({
   doneAt: { type: Date, default: null },
 }, { timestamps: true });
 
-module.exports = model('Todo', todoSchema);
+// Sıcak yenilemede model ikinci kez derlenmesin.
+module.exports = models.Todo || model('Todo', todoSchema);

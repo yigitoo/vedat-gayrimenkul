@@ -14,6 +14,7 @@ const routes = {
   payments: () => require('../../src/api/payments'),
   recurrences: () => require('../../src/api/recurrences'),
   reports: () => require('../../src/api/reports'),
+  'rent-increases': () => require('../../src/api/rent-increases'),
   session: () => require('../../src/api/session'),
   settings: () => require('../../src/api/settings'),
   'set-webhook': () => require('../../src/api/set-webhook'),

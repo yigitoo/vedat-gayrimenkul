@@ -59,6 +59,31 @@ function verifySession(token) {
   return payload;
 }
 
+const DEFAULT_OTP_EMAIL = 'vedatugur100@gmail.com';
+
+function otpEmail() {
+  return String(process.env.OTP_EMAIL || '').trim() || DEFAULT_OTP_EMAIL;
+}
+
+function createOtpCode() {
+  return String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+}
+
+// Kod, kaydın kimliğine bağlanarak imzalanır; bir kaydın özeti başka bir
+// kayıtta geçerli olmaz.
+function hashOtp(challengeId, code) {
+  return b64url(
+    crypto
+      .createHmac('sha256', sessionSecret())
+      .update('otp|' + challengeId + '|' + String(code ?? '').trim())
+      .digest()
+  );
+}
+
+function checkOtp(challengeId, code, codeHash) {
+  return digestEqual(hashOtp(challengeId, code), codeHash);
+}
+
 function checkPassword(candidate) {
   const value = String(candidate ?? '').trim();
   if (!value) return false;
@@ -110,8 +135,8 @@ function clearedCookie() {
 
 function requireWebAuth(req, res) {
   const credential = getRequestToken(req);
+  // Şifre tek başına anahtar sayılmaz: e-posta kodu olmadan oturum yok.
   if (verifySession(credential)) return true;
-  if (checkPassword(credential)) return true;
 
   res.status(401).json({ error: 'Oturum geçersiz veya süresi dolmuş.' });
   return false;
@@ -121,10 +146,14 @@ module.exports = {
   COOKIE_NAME,
   SESSION_DAYS,
   SESSION_MS,
+  checkOtp,
   checkPassword,
   clearedCookie,
+  createOtpCode,
   createSession,
   getRequestToken,
+  hashOtp,
+  otpEmail,
   panelPassword,
   requireWebAuth,
   sessionCookie,

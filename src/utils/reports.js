@@ -1,18 +1,8 @@
 const { formatMonthYear, now } = require('./format');
 const { categoryLabel } = require('./categories');
-const { getTenantDueInfo } = require('./rentSchedule');
+const { getTenantDueInfo, rentAtMonth } = require('./rentSchedule');
 
 const MONTH_SHORT = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
-
-/* O ay için geçerli kira. Kira geçmişi varsa aradan çekilir; yoksa güncel
-   tutar kullanılır. Böylece zam sonrası eski aylar geriye dönük şişmez. */
-function rentAtMonth(tenant, month, year) {
-  const endOfMonth = new Date(year, month, 0, 23, 59, 59);
-  const history = (tenant.rentHistory || [])
-    .filter((item) => item.effectiveFrom && new Date(item.effectiveFrom) <= endOfMonth)
-    .sort((a, b) => new Date(b.effectiveFrom) - new Date(a.effectiveFrom));
-  return history[0]?.amount ?? tenant.rentAmount;
-}
 
 function startedBy(tenant, month, year) {
   const endOfMonth = new Date(year, month, 0, 23, 59, 59);

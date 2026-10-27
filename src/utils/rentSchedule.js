@@ -37,6 +37,22 @@ function getTenantDueInfo(tenant, month, year) {
   };
 }
 
+/* O ay için geçerli kira. Kira geçmişi varsa aradan çekilir; yoksa güncel
+   tutar kullanılır. Böylece zam sonrası eski aylar geriye dönük şişmez,
+   ileri tarihli bir zam da (ör. kira yılı 1 Kasım'da doluyorsa) Ekim'i
+   etkilemez: o ayda henüz geçerli kayıt yoksa ilk zammın eski tutarı alınır. */
+function rentAtMonth(tenant, month, year) {
+  const endOfMonth = new Date(year, month, 0, 23, 59, 59);
+  const history = (tenant.rentHistory || [])
+    .filter((item) => item.effectiveFrom)
+    .sort((a, b) => new Date(b.effectiveFrom) - new Date(a.effectiveFrom));
+  const current = history.find((item) => new Date(item.effectiveFrom) <= endOfMonth);
+  if (current) return current.amount;
+  const first = history[history.length - 1];
+  if (first && first.previousAmount > 0) return first.previousAmount;
+  return tenant.rentAmount;
+}
+
 function buildPaymentsByTenant(payments) {
   const grouped = {};
   for (const payment of payments) {
@@ -52,8 +68,9 @@ function getTenantPaymentStatus(tenant, payments, month, year, referenceDate = n
   const totalPaid = tenantPayments.reduce((sum, payment) => sum + payment.amount, 0);
   const sortedPayments = [...tenantPayments].sort((a, b) => b.date - a.date);
   const lastDate = sortedPayments[0]?.date || null;
-  const paid = totalPaid >= tenant.rentAmount;
-  const partial = totalPaid > 0 && totalPaid < tenant.rentAmount;
+  const expected = rentAtMonth(tenant, month, year);
+  const paid = totalPaid >= expected;
+  const partial = totalPaid > 0 && totalPaid < expected;
   const dueInfo = getTenantDueInfo(tenant, month, year);
   const dueDay = dayjs(dueInfo.dueDate).startOf('day');
   const today = dayjs(referenceDate).startOf('day');
@@ -69,8 +86,8 @@ function getTenantPaymentStatus(tenant, payments, month, year, referenceDate = n
   return {
     tenant,
     totalPaid,
-    expected: tenant.rentAmount,
-    remaining: Math.max(tenant.rentAmount - totalPaid, 0),
+    expected,
+    remaining: Math.max(expected - totalPaid, 0),
     lastDate,
     paid,
     partial,
@@ -98,4 +115,5 @@ module.exports = {
   buildPaymentsByTenant,
   getTenantPaymentStatus,
   getMonthlyStatuses,
+  rentAtMonth,
 };

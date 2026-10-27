@@ -11,7 +11,7 @@ const { getMonthlyStatuses } = require('./rentSchedule');
 const C = {
   ink: '#0c1220',
   ink2: '#4a5771',
-  ink3: '#7b8aa4',
+  ink3: '#5d6a82',
   line: '#e4e8f0',
   lineSoft: '#eef1f7',
   page: '#eceff6',
@@ -371,4 +371,171 @@ function buildReportHtml({ month, year, tenants, paymentsByTenant, totalExpected
 </html>`;
 }
 
-module.exports = { buildReportHtml };
+/* Aylık bütün rapor e-postası: kısa özet, ayrıntı ekteki PDF'te.
+   Aynı palet ve kart dili; tablo düzeni posta istemcileri için. */
+function partRow({ number, title, detail, amount, fg }, last) {
+  const border = last ? 'none' : '1px solid ' + C.lineSoft;
+  return `
+      <tr>
+        <td style="padding:12px 0 12px 18px;border-bottom:${border};width:34px;vertical-align:middle;">
+          <span style="display:inline-block;width:26px;height:22px;line-height:22px;border-radius:7px;background:${C.accent};color:#ffffff;font-size:11px;font-weight:700;text-align:center;font-variant-numeric:tabular-nums;">${String(number).padStart(2, '0')}</span>
+        </td>
+        <td style="padding:12px 10px;border-bottom:${border};vertical-align:middle;">
+          <div style="font-weight:700;color:${C.ink};font-size:13.5px;letter-spacing:-.015em;">${escapeHtml(title)}</div>
+          <div style="color:${C.ink3};font-size:11.5px;margin-top:2px;">${escapeHtml(detail)}</div>
+        </td>
+        <td style="padding:12px 18px 12px 0;border-bottom:${border};vertical-align:middle;text-align:right;white-space:nowrap;">
+          <span style="font-weight:700;color:${fg || C.ink};font-size:13.5px;letter-spacing:-.02em;font-variant-numeric:tabular-nums;">${amount}</span>
+        </td>
+      </tr>`;
+}
+
+function buildFullReportHtml(report, { fileName } = {}) {
+  const t = report.totals;
+  const rent = report.rent.totals;
+  const dues = report.dues.totals;
+  const bus = report.bus.totals;
+  const period = report.label;
+  const panelUrl = process.env.PUBLIC_APP_URL || '';
+  const netPositive = t.net >= 0;
+
+  const headline = [
+    rent.paidCount + '/' + rent.tenantCount + ' kiracı ödedi',
+    rent.overdueCount ? rent.overdueCount + ' geciken' : '',
+    'net ' + formatCurrency(t.net),
+  ].filter(Boolean).join(' · ') + '.';
+
+  const parts = [
+    {
+      title: 'Kira',
+      detail: formatCurrency(rent.received) + ' / ' + formatCurrency(rent.expected) + ' · %' + rent.rate + ' tahsilat',
+      amount: formatCurrency(rent.received),
+      fg: C.accent,
+    },
+    {
+      title: 'Aidat',
+      detail: dues.dueCount ? dues.paidCount + '/' + dues.dueCount + ' ödendi' + (dues.overdueCount ? ' · ' + dues.overdueCount + ' geciken' : '') : 'Bu ay kalem yok',
+      amount: formatCurrency(t.expenseDues),
+      fg: C.warn,
+    },
+    {
+      title: 'Giderler',
+      detail: report.expenses.totals.count ? report.expenses.totals.count + ' kalem · aidat hariç' : 'Bu ay kayıt yok',
+      amount: formatCurrency(t.expenseOther),
+      fg: C.warn,
+    },
+    {
+      title: 'Gider notları',
+      detail: report.ledger.count ? report.ledger.count + ' kayıt · nete dahil değil' : 'Bu ay kayıt yok',
+      amount: formatCurrency(report.ledger.total),
+      fg: C.ink2,
+    },
+    {
+      title: 'Otobüs hattı',
+      detail: bus.days ? bus.days + ' gün · hasılat ' + formatCurrency(bus.gross) : 'Bu ay kayıt yok',
+      amount: formatCurrency(bus.net),
+      fg: bus.net >= 0 ? C.ok : C.bad,
+    },
+    {
+      title: 'Gündem',
+      detail: [
+        report.agenda.contracts.length + ' sözleşme bitişi',
+        report.agenda.increases.length + ' kira artışı',
+        report.agenda.todos.length + ' yapılacak',
+      ].join(' · '),
+      amount: '',
+    },
+  ];
+
+  return `<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light">
+  <meta name="supported-color-schemes" content="light">
+  <title>Vedat Gayrimenkul · ${escapeHtml(period)} bütün rapor</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+  <style>
+    a { text-decoration: none; }
+    @media only screen and (max-width: 620px) {
+      .container { width: 100% !important; padding: 12px !important; }
+      .header { padding: 26px 20px !important; }
+      .pad { padding-left: 18px !important; padding-right: 18px !important; }
+      .stat-cell { display: block !important; width: 100% !important; box-sizing: border-box !important; padding: 5px 0 !important; }
+    }
+  </style>
+</head>
+<body style="margin:0;padding:0;background:${C.page};font-family:${FONT};color:${C.ink};-webkit-font-smoothing:antialiased;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(period)} bütün raporu · ${escapeHtml(headline)}</div>
+
+  <div class="container" style="max-width:720px;margin:0 auto;padding:26px 16px 32px;">
+    <div style="background:${C.card};border-radius:24px;overflow:hidden;border:1px solid ${C.line};box-shadow:0 22px 60px -30px rgba(12,18,32,.45);">
+
+      <!-- Başlık -->
+      <div class="header" style="background:${C.ink};background-image:linear-gradient(135deg,#16224a 0%,#0c1220 52%,#1d2f6b 100%);padding:32px 34px;">
+        <div style="color:#93a8e8;font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;">Vedat Gayrimenkul · aylık bütün rapor</div>
+        <h1 style="margin:10px 0 0;color:#ffffff;font-size:27px;line-height:1.1;font-weight:700;letter-spacing:-.03em;">${escapeHtml(period)}</h1>
+        <p style="margin:10px 0 0;color:#c3cfef;font-size:13.5px;line-height:1.5;">${escapeHtml(headline)}</p>
+        <p style="margin:14px 0 0;color:#8496c4;font-size:11.5px;">Oluşturma: ${formatDate(report.generatedAt || now().toDate())}</p>
+      </div>
+
+      <!-- Ölçütler -->
+      <div class="pad" style="padding:22px 24px 18px;background:${C.panel};border-bottom:1px solid ${C.line};">
+        <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+          <tr>
+            ${statCard({ value: formatCurrency(t.income), label: 'Toplam gelir', fg: C.accent, bg: C.accentSoft, border: '#ccd8fa' })}
+            ${statCard({ value: formatCurrency(t.expense), label: 'Toplam gider', fg: C.warn, bg: C.warnSoft, border: '#f0dcb6' })}
+            ${statCard({ value: formatCurrency(t.net), label: 'Net', fg: netPositive ? C.ok : C.bad, bg: netPositive ? C.okSoft : C.badSoft, border: netPositive ? '#cbe8db' : '#f3cfc9' })}
+            ${statCard({ value: '%' + t.rentRate, label: 'Kira tahsilatı', fg: C.ink, bg: C.card, border: C.line })}
+          </tr>
+        </table>
+        <div style="margin-top:14px;">
+          ${progressBar(t.rentRate)}
+          <div style="margin-top:8px;color:${C.ink3};font-size:11.5px;line-height:1.5;font-variant-numeric:tabular-nums;">
+            Gelir = kira tahsilatı ${formatCurrency(t.rentReceived)} + otobüs kalanı ${formatCurrency(t.busNet)}
+          </div>
+        </div>
+      </div>
+
+      <!-- Bölümler -->
+      <div class="pad" style="padding:24px 24px 8px;">
+        <h2 style="margin:0 0 12px;font-size:15px;font-weight:700;color:${C.ink};letter-spacing:-.02em;">Bölüm bölüm</h2>
+        <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border:1px solid ${C.line};border-radius:18px;overflow:hidden;border-collapse:separate;border-spacing:0;background:${C.card};">
+          ${parts.map((part, index) => partRow({ number: index + 1, ...part }, index === parts.length - 1)).join('')}
+        </table>
+      </div>
+
+      <!-- Ek bilgisi -->
+      <div class="pad" style="padding:16px 24px 26px;">
+        <div style="border:1px dashed #ccd8fa;background:${C.accentSoft};border-radius:16px;padding:14px 18px;">
+          <div style="font-size:13.5px;font-weight:700;color:${C.accent};letter-spacing:-.01em;">Ayrıntılı rapor ekte</div>
+          <div style="font-size:12px;color:${C.ink2};margin-top:4px;line-height:1.5;">
+            ${fileName ? escapeHtml(fileName) + ' · ' : ''}kiracı kiracı tahsilat, aidat, kategori kategori giderler, otobüs gün dökümü ve gündem.
+          </div>
+        </div>
+      </div>
+
+      ${panelUrl ? `
+      <!-- Panele geçiş -->
+      <div class="pad" style="padding:0 24px 30px;">
+        <table cellpadding="0" cellspacing="0" role="presentation">
+          <tr>
+            <td style="background:${C.accent};border-radius:14px;">
+              <a href="${escapeHtml(panelUrl)}" style="display:inline-block;padding:13px 24px;color:#ffffff;font-size:13.5px;font-weight:600;letter-spacing:-.008em;">Paneli aç</a>
+            </td>
+          </tr>
+        </table>
+      </div>` : ''}
+    </div>
+
+    <p style="text-align:center;padding:18px 12px 0;margin:0;color:${C.ink3};font-size:11.5px;line-height:1.6;">
+      Vedat Gayrimenkul paneli tarafından her ayın 1'inde otomatik gönderilir.<br>
+      Gider notları defteri bilgi amaçlıdır, nete dahil edilmez.
+    </p>
+  </div>
+</body>
+</html>`;
+}
+
+module.exports = { buildFullReportHtml, buildReportHtml };

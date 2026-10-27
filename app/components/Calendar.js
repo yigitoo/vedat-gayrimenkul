@@ -13,7 +13,7 @@ import {
   Receipt,
   WarningCircle,
 } from "@phosphor-icons/react";
-import { formatCurrency, formatDate, periodLabel, statusView } from "../lib/client";
+import { dayWithSuffix, formatCurrency, formatDate, periodLabel, statusView } from "../lib/client";
 
 const WEEKDAYS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
 const TONE_ICON = { ok: CheckCircle, warn: Clock, bad: WarningCircle, calm: Clock };
@@ -315,7 +315,7 @@ export default function CalendarBoard({
           </button>
           <button className="btn btn-glass btn-wide" type="button" onClick={() => onAddRecurrence(selectedDay)}>
             <ArrowsClockwise weight="bold" />
-            Her ayın {selectedDay}&apos;i için düzenli gider
+            Her ayın {dayWithSuffix(selectedDay)} için düzenli gider
           </button>
           <button className="btn btn-quiet btn-wide" type="button" onClick={() => onSetRentDay(selectedDay)}>
             <CalendarPlus weight="bold" />

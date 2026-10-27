@@ -1,4 +1,4 @@
-const { Schema, model } = require('mongoose');
+const { Schema, model, models } = require('mongoose');
 
 /* Şehir içi hat aracı. Kayıtlar araç numarasına bağlanır: "No = 7". */
 const busSchema = new Schema({
@@ -12,4 +12,5 @@ const busSchema = new Schema({
 
 busSchema.index({ number: 1 }, { unique: true });
 
-module.exports = model('Bus', busSchema);
+// Sıcak yenilemede model ikinci kez derlenmesin.
+module.exports = models.Bus || model('Bus', busSchema);

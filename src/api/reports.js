@@ -3,13 +3,14 @@ require('dotenv').config();
 
 const connectDB = require('../db');
 const { requireWebAuth } = require('../utils/webAuth');
-const { annualReport, combinedReport, monthReport, rangeReport } = require('../services/reportData');
+const { annualReport, combinedReport, fullMonthReport, monthReport, rangeReport } = require('../services/reportData');
 const busService = require('../services/bus');
 const {
   buildAnnualReportPdf,
   buildBusMonthReportPdf,
   buildBusPeriodReportPdf,
   buildCombinedReportPdf,
+  buildFullMonthReportPdf,
   buildMonthReportPdf,
   buildRangeReportPdf,
   fileNameFor,
@@ -38,8 +39,28 @@ async function streamExcel(res, workbook, fileName) {
   res.status(200).end(Buffer.from(buffer));
 }
 
+/* Aylık bütün rapor: "kind=full" ya da "scope=full" ikisi de kabul. */
+function isFull(source = {}) {
+  return String(source.scope || source.kind || '') === 'full';
+}
+
+/* POST · aylık bütün raporu seçilen ay için şimdi e-postayla gönder.
+   Gövde: { kind: 'full', action: 'email', month, year }. */
+async function handlePost(req, res) {
+  const body = req.body || {};
+  const action = String(body.action || 'email');
+  if (!isFull(body) || action !== 'email') {
+    return res.status(400).json({ error: 'Desteklenmeyen rapor işlemi.' });
+  }
+  const { month, year } = parsePeriod(body);
+  const { sendFullMonthReport } = require('../services/monthlyReport');
+  const result = await sendFullMonthReport({ month, year, source: 'web' });
+  const { message, ...rest } = result;
+  return res.status(result.sent ? 200 : 503).json(rest);
+}
+
 module.exports = async (req, res) => {
-  if (req.method !== 'GET') {
+  if (!['GET', 'POST'].includes(req.method)) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
   if (!requireWebAuth(req, res)) return;
@@ -47,9 +68,18 @@ module.exports = async (req, res) => {
   try {
     if (mongoose.connection.readyState !== 1) await connectDB();
 
+    if (req.method === 'POST') return await handlePost(req, res);
+
     const wantsPdf = String(req.query.format || '') === 'pdf';
     const wantsExcel = ['xlsx', 'excel'].includes(String(req.query.format || '').toLowerCase());
-    const scope = String(req.query.scope || 'range');
+    const scope = isFull(req.query) ? 'full' : String(req.query.scope || 'range');
+
+    if (scope === 'full') {
+      const { month, year } = parsePeriod(req.query);
+      const report = await fullMonthReport(month, year);
+      if (!wantsPdf) return res.status(200).json(report);
+      return streamPdf(res, buildFullMonthReportPdf(report), fileNameFor('full', year, month));
+    }
 
     if (scope === 'bus') {
       const { month, year } = parsePeriod(req.query);

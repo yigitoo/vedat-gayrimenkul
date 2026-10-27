@@ -1,4 +1,4 @@
-const { Schema, model } = require('mongoose');
+const { Schema, model, models } = require('mongoose');
 
 const CATEGORIES = ['aidat', 'tamir', 'vergi', 'sigorta', 'komisyon', 'fatura', 'diger'];
 
@@ -26,5 +26,6 @@ expenseSchema.index(
   { unique: true, partialFilterExpression: { recurrence: { $type: 'objectId' } } }
 );
 
-module.exports = model('Expense', expenseSchema);
+// Sıcak yenilemede model ikinci kez derlenmesin.
+module.exports = models.Expense || model('Expense', expenseSchema);
 module.exports.CATEGORIES = CATEGORIES;

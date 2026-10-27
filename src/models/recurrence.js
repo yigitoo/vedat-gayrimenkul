@@ -1,4 +1,4 @@
-const { Schema, model } = require('mongoose');
+const { Schema, model, models } = require('mongoose');
 const Expense = require('./expense');
 
 /* Her ay tekrar eden kalem. Takvimde planlanmış olarak görünür; günü
@@ -17,4 +17,5 @@ const recurrenceSchema = new Schema({
   isActive: { type: Boolean, default: true, index: true },
 }, { timestamps: true });
 
-module.exports = model('Recurrence', recurrenceSchema);
+// Sıcak yenilemede model ikinci kez derlenmesin.
+module.exports = models.Recurrence || model('Recurrence', recurrenceSchema);

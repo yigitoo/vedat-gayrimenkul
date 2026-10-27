@@ -64,6 +64,7 @@ export default function PaymentGrid({
   exportBusy = "",
   query = "",
 }) {
+  const [exportOpen, setExportOpen] = useState(false);
   const [exportMonth, setExportMonth] = useState(1);
 
   useEffect(() => {
@@ -106,6 +107,16 @@ export default function PaymentGrid({
               <CaretRight weight="bold" />
             </button>
           </div>
+          <button
+            className={"btn btn-glass btn-sm pg-export-toggle" + (exportOpen ? " is-open" : "")}
+            type="button"
+            onClick={() => setExportOpen((value) => !value)}
+            aria-expanded={exportOpen}
+          >
+            <DownloadSimple weight="bold" />
+            Dışa aktar
+          </button>
+          <div className={"pg-exports" + (exportOpen ? " is-open" : "")}>
           <div className="pg-year-export" aria-label="Yıllık dışa aktarma">
             <button
               className={"btn btn-glass btn-sm" + (exportBusy === "year-excel" ? " is-busy" : "")}
@@ -165,7 +176,8 @@ export default function PaymentGrid({
               </button>
             </div>
           </div>
-          <button className="btn btn-primary btn-sm" type="button" onClick={() => onPay(null)}>
+          </div>
+          <button className="btn btn-primary btn-sm pg-add" type="button" onClick={() => onPay(null)}>
             <Plus weight="bold" />
             Ödeme ekle
           </button>
