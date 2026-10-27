@@ -485,7 +485,6 @@ button { cursor: pointer; }
 
 .shell {
   position: relative;
-  z-index: 1;
   min-height: 100dvh;
   display: grid;
   grid-template-columns: 248px minmax(0, 1fr);
@@ -652,9 +651,10 @@ button { cursor: pointer; }
 
 /* ---------- 8. Bölüm başlığı ---------- */
 
-.view { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--a-6); animation: rise var(--t-mid) var(--ease) both; }
+.view { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--a-6); animation: rise var(--t-mid) var(--ease) backwards; }
 
 .view-bar {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -680,7 +680,7 @@ button { cursor: pointer; }
   display: grid;
   gap: var(--a-3);
   align-content: start;
-  animation: rise var(--t-slow) var(--ease) both;
+  animation: rise var(--t-slow) var(--ease) backwards;
   animation-delay: calc(var(--i, 0) * 55ms);
 }
 
@@ -1102,7 +1102,7 @@ button { cursor: pointer; }
   min-height: 74px;
   padding: var(--a-3) var(--a-4);
   border-radius: var(--r-3);
-  animation: rise var(--t-mid) var(--ease) both;
+  animation: rise var(--t-mid) var(--ease) backwards;
   animation-delay: calc(var(--i, 0) * 34ms);
   transition: transform var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
 }
@@ -1874,7 +1874,7 @@ button { cursor: pointer; }
   gap: var(--a-3);
   padding: var(--a-4);
   border-radius: var(--r-3);
-  animation: rise var(--t-mid) var(--ease) both;
+  animation: rise var(--t-mid) var(--ease) backwards;
   animation-delay: calc(var(--i, 0) * 34ms);
 }
 
@@ -3418,17 +3418,17 @@ kbd {
 /* ---- Ekran geçişi: her bölüm kısa bir yükselişle gelir, içindeki
    bloklar 40 ms arayla sıralanır. Yalnız transform ve opaklık. ---- */
 .screen { display: grid; gap: var(--a-6); min-width: 0; }
-.screen > * { animation: screen-in var(--t-enter) var(--ease-out) both; }
+.screen > * { animation: screen-in var(--t-enter) var(--ease-out) backwards; }
 .screen > .view { animation: none; }
-.screen > .view > * { animation: screen-in var(--t-enter) var(--ease-out) both; }
+.screen > .view > * { animation: screen-in var(--t-enter) var(--ease-out) backwards; }
 .screen > .view > *:nth-child(2) { animation-delay: 40ms; }
 .screen > .view > *:nth-child(3) { animation-delay: 80ms; }
 .screen > .view > *:nth-child(4) { animation-delay: 120ms; }
 .screen > .view > *:nth-child(5) { animation-delay: 160ms; }
 .screen > .view > *:nth-child(n + 6) { animation-delay: 200ms; }
 .screen > *:nth-child(2) { animation-delay: 50ms; }
-.tile { animation: screen-in var(--t-enter) var(--ease-out) both; animation-delay: calc(var(--i, 0) * 45ms); }
-.row.glass { animation: screen-in var(--t-enter) var(--ease-out) both; animation-delay: calc(min(var(--i, 0), 10) * 30ms); }
+.tile { animation: screen-in var(--t-enter) var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * 45ms); }
+.row.glass { animation: screen-in var(--t-enter) var(--ease-out) backwards; animation-delay: calc(min(var(--i, 0), 10) * 30ms); }
 
 @keyframes screen-in {
   from { opacity: 0; transform: translateY(8px); }
@@ -3722,7 +3722,7 @@ kbd {
 }
 .raise-rate small { font-size: 11px; font-weight: 500; color: var(--text-3); }
 .raise-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--a-2); }
-.raise-list li { animation: screen-in var(--t-enter) var(--ease-out) both; animation-delay: calc(var(--i, 0) * 50ms + 80ms); }
+.raise-list li { animation: screen-in var(--t-enter) var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * 50ms + 80ms); }
 .raise-row {
   width: 100%;
   display: grid;
@@ -4106,7 +4106,7 @@ body, .rail, .topbar, .tile, .panel, .row, .btn, .rail-link, .tab {
   min-width: 0;
   padding: 0 var(--a-4);
   border-left: 1px solid var(--line);
-  animation: screen-in var(--t-enter) var(--ease-out) both;
+  animation: screen-in var(--t-enter) var(--ease-out) backwards;
   animation-delay: calc(var(--i, 0) * 40ms);
 }
 .pulse-item:first-child { border-left: 0; padding-left: 0; }
@@ -4128,7 +4128,7 @@ body, .rail, .topbar, .tile, .panel, .row, .btn, .rail-link, .tab {
   border-radius: inherit;
   background: linear-gradient(90deg, var(--ok), color-mix(in srgb, var(--ok) 60%, var(--accent)));
   transform-origin: left;
-  animation: bar-grow 700ms var(--ease-out) both 120ms;
+  animation: bar-grow 700ms var(--ease-out) backwards 120ms;
   transition: width var(--t-slow) var(--ease-out);
 }
 @keyframes bar-grow { from { transform: scaleX(0); } to { transform: none; } }
@@ -4158,7 +4158,7 @@ body, .rail, .topbar, .tile, .panel, .row, .btn, .rail-link, .tab {
   border: 1px solid var(--line);
   border-radius: var(--r-2);
   background: var(--solid-2);
-  animation: screen-in var(--t-enter) var(--ease-out) both;
+  animation: screen-in var(--t-enter) var(--ease-out) backwards;
 }
 .cpi-cell span { font-size: 11px; font-weight: 600; color: var(--text-3); }
 .cpi-cell strong { font-size: var(--fs-base); font-weight: 700; }
@@ -4199,7 +4199,7 @@ body, .rail, .topbar, .tile, .panel, .row, .btn, .rail-link, .tab {
     border-radius: var(--r-2);
     background: var(--solid);
   }
-  .pg-exports.is-open { display: grid; animation: screen-in var(--t-enter) var(--ease-out) both; }
+  .pg-exports.is-open { display: grid; animation: screen-in var(--t-enter) var(--ease-out) backwards; }
   .pg-exports .pg-month-export { display: grid; gap: var(--a-2); }
   .pg-exports .pg-year-export { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--a-2); }
   .pg-exports .btn, .pg-exports select { width: 100%; min-width: 0; }
@@ -4238,3 +4238,55 @@ body, .rail, .topbar, .tile, .panel, .row, .btn, .rail-link, .tab {
 /* Giriş kartı da yalnız transform ve opaklıkla gelir (bulanıklık canlandırılmaz).
    Inter yalnız 400/500/600/700 yüklü: ara ağırlıklar en yakına çekilir. */
 .auth-card { animation: sheet-in var(--t-enter) var(--ease-out) both; }
+
+
+/* ---------- 51. Katman ölçeği ----------
+   Bütün z-index değerleri buradan gelir. Kabuk kendi katmanını açmaz (ortam
+   zemini DOM'da önce geldiği için zaten altta kalır); böylece içerideki açılır
+   pencereler alt menü ve bildirimlerle aynı düzlemde yarışır, hapsolmaz.
+   Giriş animasyonları "backwards" dolguyla biter: bittikten sonra kart ayrı
+   katman olarak kalmaz, komşu kartın açılır penceresinin üstüne binmez. */
+:root {
+  --z-base: 1;
+  --z-raised: 10;      /* açık açılır pencereyi taşıyan satır */
+  --z-sticky: 30;      /* üst şerit */
+  --z-dropdown: 45;    /* tarih seçici, palet penceresi (masaüstü) */
+  --z-nav: 50;         /* alt menü */
+  --z-overlay: 60;     /* pencere örtüsü ve pencere */
+  --z-sheet-pop: 66;   /* telefonda alttan açılan seçiciler */
+  --z-toast: 70;
+  --z-palette: 80;     /* arama paleti */
+  --z-progress: 90;    /* yükleme çizgisi */
+}
+.ambient { z-index: 0; }
+.auth, .boot { z-index: var(--z-base); }
+.topbar { z-index: var(--z-sticky); overflow: visible; }
+.drp.is-open { z-index: var(--z-dropdown); }
+.view-bar:has(.drp.is-open), .mode-switch:has(.drp.is-open) { z-index: var(--z-raised); }
+.tabbar { z-index: var(--z-nav); }
+.scrim { z-index: var(--z-overlay); }
+.toast { z-index: var(--z-toast); }
+.palette-scrim { z-index: var(--z-palette); }
+.loadbar { z-index: var(--z-progress); }
+.accent-pop { z-index: var(--z-dropdown); }
+@media (max-width: 720px) {
+  .drp-scrim { z-index: calc(var(--z-sheet-pop) - 1); }
+  .drp-pop { z-index: var(--z-sheet-pop); }
+}
+
+/* Palet penceresi body'de yaşar: konumu sabit, katmanı bildirimin üstünde */
+.accent-pop.is-anchored,
+.accent-pop.is-sheet { position: fixed; z-index: calc(var(--z-toast) + 1); }
+.accent-pop.is-sheet { top: auto; left: 12px; right: 12px; bottom: calc(84px + env(safe-area-inset-bottom)); width: auto; transform-origin: bottom center; }
+@media (min-width: 721px) {
+  .accent-pop.is-sheet { left: auto; right: 16px; top: 72px; bottom: auto; width: 248px; }
+}
+/* Onay penceresi başka bir pencerenin içinden açılabilir (ör. kiracı
+   dosyasında ödeme silme); her zaman onun üstünde dursun. */
+.scrim:has(> .sheet-compact) { z-index: calc(var(--z-overlay) + 2); }
+/* Telefonda tarih seçici alttan tam panel açılır: taşıyan satır alt menünün
+   üstüne çıkmalı, yoksa "Uygula" düğmesi menünün altında kalır. */
+@media (max-width: 720px) {
+  .view-bar:has(.drp.is-open), .mode-switch:has(.drp.is-open) { z-index: var(--z-sheet-pop); }
+  .drp-pop { padding-bottom: env(safe-area-inset-bottom); }
+}

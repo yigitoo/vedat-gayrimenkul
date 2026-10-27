@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Archive,
   ArrowClockwise,
@@ -306,30 +307,55 @@ function AuthGate({ onSubmit, onVerify, onReset, challenge, error, busy }) {
 
 function AccentPicker({ accent, theme, onAccent, onTheme }) {
   const [open, setOpen] = useState(false);
-  const wrapRef = useRef(null);
+  const [place, setPlace] = useState(null);
+  const buttonRef = useRef(null);
+  const popRef = useRef(null);
+
+  // Pencere body'ye taşınır: üst şerit, alt menü ya da kart katmanı onu
+  // kesemez. Geniş ekranda düğmenin altına hizalanır, telefonda alttan çıkar.
+  function toggle() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    const rect = buttonRef.current?.getBoundingClientRect();
+    const phone = window.matchMedia("(max-width: 720px)").matches;
+    setPlace(rect && !phone ? { top: rect.bottom + 8, right: Math.max(window.innerWidth - rect.right, 12) } : null);
+    setOpen(true);
+  }
 
   useEffect(() => {
     if (!open) return undefined;
     function onDown(event) {
-      if (!wrapRef.current?.contains(event.target)) setOpen(false);
+      if (buttonRef.current?.contains(event.target) || popRef.current?.contains(event.target)) return;
+      setOpen(false);
     }
     function onKey(event) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        setOpen(false);
+        buttonRef.current?.focus();
+      }
+    }
+    function onResize() {
+      setOpen(false);
     }
     document.addEventListener("pointerdown", onDown);
     document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", onResize);
     return () => {
       document.removeEventListener("pointerdown", onDown);
       document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", onResize);
     };
   }, [open]);
 
   return (
-    <div className="accent-wrap" ref={wrapRef}>
+    <>
       <button
+        ref={buttonRef}
         className={"icon-btn topbar-accent" + (open ? " is-active" : "")}
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={toggle}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label="Renk paleti"
@@ -337,46 +363,55 @@ function AccentPicker({ accent, theme, onAccent, onTheme }) {
       >
         <Palette weight="bold" />
       </button>
-      {open ? (
-        <div className="accent-pop" role="dialog" aria-label="Renk paleti">
-          <p className="eyebrow">Renk paleti</p>
-          <div className="accent-grid" role="radiogroup" aria-label="Vurgu rengi">
-            {ACCENTS.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                role="radio"
-                aria-checked={accent === item.id}
-                className={"accent-swatch" + (accent === item.id ? " is-active" : "")}
-                style={{ "--sw": item.swatch }}
-                onClick={() => onAccent(item.id)}
-              >
-                <i />
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </div>
-          <div className="accent-row">
-            <button
-              className={"btn btn-sm " + (theme === "light" ? "btn-primary" : "btn-glass")}
-              type="button"
-              onClick={() => theme !== "light" && onTheme()}
+      {open
+        ? createPortal(
+            <div
+              ref={popRef}
+              className={"accent-pop" + (place ? " is-anchored" : " is-sheet")}
+              style={place ? { top: place.top, right: place.right } : undefined}
+              role="dialog"
+              aria-label="Renk paleti"
             >
-              <Sun weight="bold" />
-              Açık
-            </button>
-            <button
-              className={"btn btn-sm " + (theme === "dark" ? "btn-primary" : "btn-glass")}
-              type="button"
-              onClick={() => theme !== "dark" && onTheme()}
-            >
-              <Moon weight="bold" />
-              Koyu
-            </button>
-          </div>
-        </div>
-      ) : null}
-    </div>
+              <p className="eyebrow">Renk paleti</p>
+              <div className="accent-grid" role="radiogroup" aria-label="Vurgu rengi">
+                {ACCENTS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={accent === item.id}
+                    className={"accent-swatch" + (accent === item.id ? " is-active" : "")}
+                    style={{ "--sw": item.swatch }}
+                    onClick={() => onAccent(item.id)}
+                  >
+                    <i />
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="accent-row">
+                <button
+                  className={"btn btn-sm " + (theme === "light" ? "btn-primary" : "btn-glass")}
+                  type="button"
+                  onClick={() => theme !== "light" && onTheme()}
+                >
+                  <Sun weight="bold" />
+                  Açık
+                </button>
+                <button
+                  className={"btn btn-sm " + (theme === "dark" ? "btn-primary" : "btn-glass")}
+                  type="button"
+                  onClick={() => theme !== "dark" && onTheme()}
+                >
+                  <Moon weight="bold" />
+                  Koyu
+                </button>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+    </>
   );
 }
 
@@ -427,7 +462,7 @@ function FullReportCard({ token, onFlash, onAuthError }) {
       onFlash("ok", periodLabel(target) + " raporu " + (result.recipients || []).join(", ") + " adresine gönderildi.");
     } catch (error) {
       if (error.status === 401) onAuthError();
-      else onFlash("bad", "E-posta gönderilemedi: " + error.message);
+      else onFlash("bad", error.message);
     } finally {
       setBusy("");
     }
@@ -2801,6 +2836,8 @@ function screenId(value) {
 }
 
 function reasonText(result) {
+  const reason = result.reason || result.email?.reason;
+  if (reason === "auth_failed") return " Gmail giriş bilgilerini kabul etmedi; Vercel'de EMAIL_PASS'ı yeni bir uygulama şifresiyle güncelleyin.";
   if (result.reason === "no_recipients") return " Hedef tanımlı değil.";
   if (result.reason === "not_configured") return " Kanal yapılandırılmamış.";
   if (result.reason === "nothing_due") return " Gönderilecek bir şey yok.";

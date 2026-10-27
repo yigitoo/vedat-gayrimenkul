@@ -52,7 +52,9 @@ async function deliver({ subject, text, html, recipients, attachments }) {
     return { sent: true, recipients: to };
   } catch (error) {
     console.error('E-posta gönderilemedi:', error);
-    return { sent: false, reason: 'email_error', error: error.message, recipients: to };
+    // Gmail kullanıcı adı ya da uygulama şifresini reddetti: kod değil ayar sorunu.
+    const reason = error.code === 'EAUTH' ? 'auth_failed' : 'email_error';
+    return { sent: false, reason, error: error.message, recipients: to };
   }
 }
 

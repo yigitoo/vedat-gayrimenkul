@@ -56,7 +56,17 @@ async function handlePost(req, res) {
   const { sendFullMonthReport } = require('../services/monthlyReport');
   const result = await sendFullMonthReport({ month, year, source: 'web' });
   const { message, ...rest } = result;
+  if (!result.sent) rest.error = mailFailureText(result);
   return res.status(result.sent ? 200 : 503).json(rest);
+}
+
+function mailFailureText(result) {
+  if (result.reason === 'auth_failed') {
+    return 'Gmail giriş bilgilerini kabul etmedi. Google hesabında yeni bir uygulama şifresi oluşturup Vercel\'de EMAIL_PASS olarak güncelleyin.';
+  }
+  if (result.reason === 'not_configured') return 'E-posta ayarlı değil: Vercel\'de EMAIL_USER ve EMAIL_PASS tanımlı olmalı.';
+  if (result.reason === 'no_recipients') return 'Alıcı adresi tanımlı değil.';
+  return result.error || 'E-posta gönderilemedi.';
 }
 
 module.exports = async (req, res) => {
