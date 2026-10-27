@@ -4290,3 +4290,19 @@ body, .rail, .topbar, .tile, .panel, .row, .btn, .rail-link, .tab {
   .view-bar:has(.drp.is-open), .mode-switch:has(.drp.is-open) { z-index: var(--z-sheet-pop); }
   .drp-pop { padding-bottom: env(safe-area-inset-bottom); }
 }
+
+/* ---------- 52. Çevrimdışı şeridi ---------- */
+.offline-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--a-2);
+  padding: var(--a-2) var(--a-4);
+  border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent);
+  border-radius: var(--r-2);
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  animation: screen-in var(--t-enter) var(--ease-out) backwards;
+}
+.offline-strip svg { width: 16px; height: 16px; flex: none; }

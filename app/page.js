@@ -1340,6 +1340,7 @@ export default function Page() {
   const [privacy, setPrivacy] = useState(false);
   const [accent, setAccent] = useState("mavi");
   const [bootError, setBootError] = useState("");
+  const [online, setOnline] = useState(true);
   const [bootStamp, setBootStamp] = useState(0);
   const [raises, setRaises] = useState(null);
   const [raiseStamp, setRaiseStamp] = useState(0);
@@ -1410,6 +1411,18 @@ export default function Page() {
     };
   }, []);
 
+  // Bağlantı durumu: çevrimdışıyken son kaydedilen veriler gösterilir.
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    update();
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
+
   /* Klavye: ⌘K / Ctrl+K ya da "/" aramayı açar, ⌘⇧H tutarları gizler. */
   useEffect(() => {
     function onKey(event) {
@@ -1446,6 +1459,8 @@ export default function Page() {
 
   const signOut = useCallback(async (message) => {
     clearSession();
+    // Cihazda saklanan son özet verisi de silinsin.
+    navigator.serviceWorker?.controller?.postMessage("clear-data");
     setSession(null);
     setData(null);
     setAuthError(message || "");
@@ -2325,6 +2340,13 @@ export default function Page() {
               </button>
             </div>
           </header>
+
+          {!online ? (
+            <div className="offline-strip" role="status">
+              <WarningCircle weight="fill" />
+              Çevrimdışı · son kaydedilen veriler gösteriliyor, değişiklikler bağlantı gelince yapılabilir.
+            </div>
+          ) : null}
 
           <div className="screen" key={view + (privacy ? ":gizli" : "")}>
           {view === "overview" ? (
