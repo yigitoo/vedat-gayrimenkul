@@ -183,10 +183,7 @@ async function loadTodayList({ reference = now() } = {}) {
     for (const row of grid.rows) {
       for (const cell of row.months) {
         if (!cell.inside || cell.expected <= 0) continue;
-        if (cell.status === 'paid') {
-          if (cell.lastDate && dayjs(cell.lastDate).utcOffset(3).format('YYYY-MM-DD') === todayIso) paidToday += cell.paid;
-          continue;
-        }
+        if (cell.status === 'paid') continue;
         if (cell.remaining <= 0) continue;
         const item = {
           tenantId: row.tenantId,
@@ -206,6 +203,13 @@ async function loadTodayList({ reference = now() } = {}) {
         else if (cell.daysUntilDue < 0) overdue.push(item);
       }
     }
+  }
+
+  // Bugün alınan: tarihi bugün olan tek tek kayıtlar (taksitler dahil).
+  const activeIds = new Set(tenants.map((tenant) => tenant._id.toString()));
+  for (const payment of payments) {
+    if (!payment.date || !activeIds.has(payment.tenant.toString())) continue;
+    if (dayjs(payment.date).utcOffset(3).format('YYYY-MM-DD') === todayIso) paidToday += payment.amount;
   }
 
   today.sort((a, b) => a.name.localeCompare(b.name, 'tr'));

@@ -2809,6 +2809,8 @@ export default function Page() {
             setModal(null);
             if (result) setRaises((current) => ({ ...(current || {}), ...result }));
             setRaiseStamp((value) => value + 1);
+            // Yeni kira bakiyeleri değiştirir: yıl tablosu ve Bugün listesi tazelensin.
+            setGridStamp((value) => value + 1);
             setFlash({ tone: "ok", message });
             await reload();
           }}
