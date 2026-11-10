@@ -502,8 +502,12 @@ function FullReportCard({ token, onFlash, onAuthError }) {
    Takvimin üstünde o ayın para resmi: beklenen, gelen, kalan, gider, net.
    Takvimde ay değişince bu şerit de o aya döner. */
 
-function MonthPulse({ metrics, period }) {
+function MonthPulse({ metrics, period, statuses = [] }) {
   const rate = Math.min(Math.max(metrics.collectionRate || 0, 0), 100);
+  // Geciken: son günü geçmiş ve tam ödenmemiş (eksik ödenenler dahil).
+  const lateCount = statuses.length
+    ? statuses.filter((item) => !item.paid && item.daysUntilDue < 0).length
+    : metrics.overdueCount || 0;
   const items = [
     { key: "expected", label: "Beklenen kira", value: metrics.totalExpected, meta: metrics.tenantCount + " kiracı" },
     { key: "received", label: "Tahsil edilen", value: metrics.totalReceived, meta: "%" + rate + " tamamlandı", tone: "ok" },
@@ -515,11 +519,11 @@ function MonthPulse({ metrics, period }) {
       tone: metrics.overdueCount ? "bad" : "warn",
     },
     {
-      key: "unpaid",
-      label: "Ödenmemiş kira",
-      count: Math.max((metrics.tenantCount || 0) - (metrics.paidCount || 0), 0),
-      meta: (metrics.overdueCount || 0) + " geciken",
-      tone: metrics.overdueCount ? "bad" : undefined,
+      key: "late",
+      label: "Geciken kira",
+      count: lateCount,
+      meta: lateCount ? "son günü geçti" : "geciken yok",
+      tone: lateCount ? "bad" : "ok",
     },
     { key: "net", label: "Net", value: metrics.netIncome, meta: "tahsilat − gider", tone: metrics.netIncome >= 0 ? "accent" : "bad" },
   ];
@@ -2474,7 +2478,7 @@ export default function Page() {
 
           {view === "calendar" ? (
             <div className="view" data-busy={loading} aria-busy={loading}>
-              <MonthPulse metrics={data.metrics} period={data.period} />
+              <MonthPulse metrics={data.metrics} period={data.period} statuses={data.statuses || []} />
               <CalendarBoard
                 period={data.period}
                 statuses={data.statuses || []}
