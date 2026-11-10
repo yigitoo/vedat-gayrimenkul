@@ -12,8 +12,6 @@ const { notifyRentIncreased, notifyRentIncreaseDue } = require('./notificationSe
 
 const DAY_MS = 86400000;
 const DUE_BEFORE_DAYS = 30;
-// 12 ay erken ödendiyse (12/12) öneri dönümden bu kadar önce de çıkar.
-const FULL_BEFORE_DAYS = 62;
 const DUE_AFTER_DAYS = 60;
 // Dönümden biraz önce girilen zam da o yılın zammı sayılır.
 const RAISED_GRACE_DAYS = 15;
@@ -43,8 +41,12 @@ function isoDay(key) {
   return new Date(key).toISOString().slice(0, 10);
 }
 
-function tenancyStart(tenant) {
+/* Kira yılının başlangıcı: sözleşme başlangıcı girildiyse o; girilmediyse
+   tabloda ilk işaretlenen kutunun (ilk ödemenin dönemi) ayının 1'i. Hiç
+   ödeme yoksa ilk kira kaydının tarihi. */
+function tenancyStart(tenant, firstPaid = null) {
   if (tenant.contractStart) return tenant.contractStart;
+  if (firstPaid) return new Date(Date.UTC(firstPaid.year, firstPaid.month - 1, 1, 9));
   const first = (tenant.rentHistory || [])
     .map((item) => item.effectiveFrom)
     .filter(Boolean)
@@ -57,15 +59,16 @@ function floorTo10(value) {
   return Math.floor(value / 10) * 10;
 }
 
-/* Bu kiracı için şu an "vadesi gelmiş" dönüm (yoksa null). */
-function dueAnniversary(tenant, today, before = DUE_BEFORE_DAYS) {
-  const start = tenancyStart(tenant);
+/* Bu kiracının içinde bulunduğu kira yılının dönümü: yaklaşan ya da son
+   60 gün içinde geçmiş olan. Uzaklık burada sınırlanmaz; öneri, dönüme 30
+   gün kaldıysa ya da o kira yılının 12 kutusu dolduysa çıkar. */
+function dueAnniversary(tenant, today, firstPaid = null) {
+  const start = tenancyStart(tenant, firstPaid);
   if (!start) return null;
   const startKey = dayKey(start);
   for (let years = 1; years <= 60; years += 1) {
     const key = addYears(startKey, years);
     const diff = Math.round((key - today) / DAY_MS);
-    if (diff > before) return null;
     if (diff >= -DUE_AFTER_DAYS) return { key, years, daysUntil: diff, startKey };
   }
   return null;
@@ -73,7 +76,9 @@ function dueAnniversary(tenant, today, before = DUE_BEFORE_DAYS) {
 
 function alreadyRaised(tenant, anniversaryKey) {
   const limit = anniversaryKey - RAISED_GRACE_DAYS * DAY_MS;
-  return (tenant.rentHistory || []).some((item) => item.effectiveFrom && dayKey(item.effectiveFrom) >= limit);
+  // İlk kayıt ve tutar düzeltmesi (previousAmount 0) zam sayılmaz.
+  return (tenant.rentHistory || []).some((item) =>
+    item.effectiveFrom && Number(item.previousAmount) > 0 && dayKey(item.effectiveFrom) >= limit);
 }
 
 function isDismissed(tenant, anniversaryKey) {
@@ -163,9 +168,22 @@ async function getSuggestions({ reference = now(), tenantId = null } = {}) {
     CpiRate.find({}).sort({ year: -1, month: -1 }).lean(),
   ]);
 
+  // Sözleşme başlangıcı olmayanlar için ilk işaretlenen kutu (ilk ödeme dönemi).
+  const firstPaid = new Map();
+  const noContract = tenants.filter((tenant) => !tenant.contractStart).map((tenant) => tenant._id);
+  if (noContract.length) {
+    const rows = await Payment.aggregate([
+      { $match: { tenant: { $in: noContract }, amount: { $gt: 0 } } },
+      { $group: { _id: '$tenant', first: { $min: { $add: [{ $multiply: ['$year', 12] }, { $subtract: ['$month', 1] }] } } } },
+    ]);
+    for (const row of rows) {
+      firstPaid.set(row._id.toString(), { year: Math.floor(row.first / 12), month: (row.first % 12) + 1 });
+    }
+  }
+
   const due = [];
   for (const tenant of tenants) {
-    const anniversary = dueAnniversary(tenant, today, FULL_BEFORE_DAYS);
+    const anniversary = dueAnniversary(tenant, today, firstPaid.get(tenant._id.toString()) || null);
     if (!anniversary) continue;
     if (alreadyRaised(tenant, anniversary.key)) continue;
     if (isDismissed(tenant, anniversary.key)) continue;
@@ -181,7 +199,7 @@ async function getSuggestions({ reference = now(), tenantId = null } = {}) {
       pickRate(rates, anniversary.key),
       countPaid(tenant, anniversary.key)
     ))
-    // 30 günden uzak dönüm yalnız 12 aylık tablo dolduysa (12/12) sorulur.
+    // 30 günden uzak dönüm yalnız o kira yılının 12 kutusu dolduysa sorulur.
     .filter((item) => item.daysUntil <= DUE_BEFORE_DAYS || item.allPaid)
     .sort((a, b) => a.anniversary.localeCompare(b.anniversary) || a.name.localeCompare(b.name, 'tr'));
 }

@@ -50,6 +50,9 @@ function rentAtMonth(tenant, month, year) {
   if (current) return current.amount;
   const first = history[history.length - 1];
   if (first && first.previousAmount > 0) return first.previousAmount;
+  // İlk kayıttan önceki aylar (ilk kutu kiracı eklenmeden önce işaretlendiyse)
+  // ilk kaydın tutarıyla sayılır; zam sonrası güncel tutara kaymasın.
+  if (first) return first.amount;
   return tenant.rentAmount;
 }
 
