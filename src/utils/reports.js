@@ -328,21 +328,12 @@ function buildYearGrid({ year, tenants, payments, reference = now().toDate() }) 
     cells.set(key, entry);
   }
 
-  // Sözleşme başlangıcı yoksa ilk işaretlenen kutu kira başlangıcı sayılır.
-  const firstPaidMonth = new Map();
-  for (const payment of payments) {
-    if (payment.year !== year || !(payment.amount > 0)) continue;
-    const key = payment.tenant.toString();
-    if (!firstPaidMonth.has(key) || payment.month < firstPaidMonth.get(key)) firstPaidMonth.set(key, payment.month);
-  }
-
   const rows = tenants.map((tenant) => {
     const id = tenant._id.toString();
-    const firstBox = tenant.contractStart ? null : firstPaidMonth.get(id) || null;
 
     const months = Array.from({ length: 12 }, (unused, index) => {
       const month = index + 1;
-      const inside = startedBy(tenant, month, year) || Boolean(firstBox && month >= firstBox);
+      const inside = startedBy(tenant, month, year);
       const expected = rentAtMonth(tenant, month, year);
       const entry = cells.get(id + ':' + month) || { total: 0, count: 0, lastDate: null };
       const dueInfo = getTenantDueInfo(tenant, month, year);
