@@ -273,11 +273,11 @@ export function TenantSheet({ mode, tenant, token, onClose, onSaved }) {
 
 /* ---------- Ödeme ---------- */
 
-export function PaymentSheet({ tenantId, tenants, period, date, token, onClose, onSaved }) {
+export function PaymentSheet({ tenantId, tenants, period, amount, date, token, onClose, onSaved }) {
   const selected = tenants.find((tenant) => tenant.id === tenantId) || tenants[0];
   const [form, setForm] = useState({
     tenantId: selected?.id || "",
-    amount: selected?.rentAmount || "",
+    amount: amount || selected?.rentAmount || "",
     date: date ? toDateInput(date) : toDateInput(new Date()),
     month: period.month,
     year: period.year,

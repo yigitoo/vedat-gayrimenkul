@@ -58,6 +58,7 @@ import MonthSheet from "./components/MonthSheet";
 import LedgerView from "./components/Ledger";
 import TodosView from "./components/Todos";
 import PaymentGrid from "./components/PaymentGrid";
+import TodayDue from "./components/TodayDue";
 import ReportsView from "./components/Reports";
 import SettingsView from "./components/Settings";
 import {
@@ -127,7 +128,7 @@ const MONTH_LONG = [
 const VIEWS = [
   { id: "overview", label: "Özet", icon: SquaresFour, lead: "Dönemin tahsilat resmi ve sıradaki ödemeler.", primary: true, group: "Genel" },
   { id: "calendar", label: "Takvim", icon: CalendarBlank, lead: "Hangi gün kimden ne bekleniyor.", primary: true, group: "Genel" },
-  { id: "payments", label: "Ödemeler", icon: Wallet, lead: "Yıl tablosu ve dönem defteri: kim ödedi, kim gecikti.", primary: true, group: "Kira" },
+  { id: "payments", label: "Ödemeler", icon: Wallet, lead: "Yıl tablosu, dönem defteri ve bugün tahsil edilecekler: kim ödedi, kim gecikti.", primary: true, group: "Kira" },
   { id: "tenants", label: "Kiracılar", icon: UsersThree, lead: "Sözleşmeler, kira tutarları ve zam önerileri.", primary: true, group: "Kira" },
   { id: "dues", label: "Aidat", icon: Buildings, lead: "Apartman ve site aidatı: hangi ay ödendi.", group: "Kira" },
   { id: "bus", label: "Otobüs", icon: Bus, lead: "Hat defteri: gün gün hasılat, mazot, yövmiye.", group: "İşletme" },
@@ -1319,6 +1320,9 @@ export default function Page() {
   const [gridLoading, setGridLoading] = useState(false);
   const [gridPending, setGridPending] = useState("");
   const [gridStamp, setGridStamp] = useState(0);
+  const [todayList, setTodayList] = useState(null);
+  const [todayLoading, setTodayLoading] = useState(false);
+  const [todayPending, setTodayPending] = useState("");
   const [duesYear, setDuesYear] = useState(0);
   const [dues, setDues] = useState(null);
   const [duesLoading, setDuesLoading] = useState(false);
@@ -1541,6 +1545,56 @@ export default function Page() {
       cancelled = true;
     };
   }, [view, paymentTab, gridYear, gridStamp, token, signOut]);
+
+  // Bugün tahsil edilecekler: yalnız o sekme açıkken; her ödeme işleminde tazelenir.
+  useEffect(() => {
+    if (view !== "payments" || paymentTab !== "today" || !token) return undefined;
+    let cancelled = false;
+    setTodayLoading(true);
+    apiRequest("/api/payments?scope=today", {}, token)
+      .then((payload) => {
+        if (!cancelled) setTodayList(payload);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        if (error.status === 401) signOut("Oturum süresi doldu, tekrar giriş yapın.");
+        else setFlash({ tone: "bad", message: error.message });
+      })
+      .finally(() => {
+        if (!cancelled) setTodayLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [view, paymentTab, gridStamp, token, signOut]);
+
+  /* Kira yılı (12 ay) dolunca zam sorusu kendiliğinden açılır. "Bekle"
+     denirse öneri beklemede kalır; bu oturumda aynı kiracı için tekrar
+     açılmaz, sonraki girişte yine sorulur. */
+  const raiseAskedRef = useRef(null);
+  useEffect(() => {
+    if (view !== "payments" || modal) return;
+    const list = raises?.suggestions || [];
+    if (!raiseAskedRef.current) {
+      let stored = [];
+      try {
+        stored = JSON.parse(window.sessionStorage.getItem("kira-akis-raise-asked") || "[]");
+      } catch {
+        stored = [];
+      }
+      raiseAskedRef.current = new Set(Array.isArray(stored) ? stored : []);
+    }
+    const asked = raiseAskedRef.current;
+    const due = list.find((item) => item.daysUntil <= 0 && !asked.has(item.tenantId + ":" + item.anniversary));
+    if (!due) return;
+    asked.add(due.tenantId + ":" + due.anniversary);
+    try {
+      window.sessionStorage.setItem("kira-akis-raise-asked", JSON.stringify([...asked]));
+    } catch {
+      /* oturum deposu kapalıysa yalnız bellekte tutulur */
+    }
+    setModal({ type: "raise", suggestion: due, auto: true });
+  }, [view, modal, raises]);
 
   // Aidat çizelgesi de yalnız kendi ekranında çekilir.
   useEffect(() => {
@@ -1914,6 +1968,50 @@ export default function Page() {
       setFlash({ tone: "bad", message: error.message });
     } finally {
       setGridPending("");
+    }
+  }
+
+  /* Bugün listesinden "Ödendi": dönemin açığı kadar tek kayıt düşer,
+     yıl tablosundaki kutucuk işaretlemesiyle aynı istek. */
+  async function markTodayItem(item) {
+    const key = item.tenantId + ":" + item.year + ":" + item.month;
+    const label = MONTH_LONG[item.month - 1] + " " + item.year;
+    setTodayPending(key);
+    try {
+      const result = await apiRequest(
+        "/api/payments",
+        {
+          method: "POST",
+          body: JSON.stringify({ tenantId: item.tenantId, month: item.month, year: item.year, fill: true }),
+        },
+        token
+      );
+      const paymentId = result.payment?.id;
+      setFlash({
+        tone: "ok",
+        message: result.skipped ? label + " zaten ödenmiş görünüyor." : item.name + " · " + label + " ödendi.",
+        action: result.skipped || !paymentId
+          ? null
+          : {
+              label: "Geri al",
+              run: async () => {
+                try {
+                  await apiRequest("/api/payments?id=" + paymentId, { method: "DELETE" }, token);
+                  setGridStamp((value) => value + 1);
+                  await reload();
+                } catch (error) {
+                  setFlash({ tone: "bad", message: error.message });
+                }
+              },
+            },
+      });
+      setGridStamp((value) => value + 1);
+      setRaiseStamp((value) => value + 1);
+      await reload();
+    } catch (error) {
+      setFlash({ tone: "bad", message: error.message });
+    } finally {
+      setTodayPending("");
     }
   }
 
@@ -2400,6 +2498,20 @@ export default function Page() {
                   >
                     Dönem defteri
                   </button>
+                  <button
+                    type="button"
+                    className={"filter" + (paymentTab === "today" ? " is-active" : "")}
+                    onClick={() => setPaymentTab("today")}
+                    aria-pressed={paymentTab === "today"}
+                    aria-label="Bugün tahsil edilecekler"
+                  >
+                    Bugün
+                    {todayList && todayList.totals.todayCount + todayList.totals.overdueCount > 0 ? (
+                      <span className="filter-count num">
+                        {todayList.totals.todayCount + todayList.totals.overdueCount}
+                      </span>
+                    ) : null}
+                  </button>
                 </div>
                 <div className="search glass glass--chip">
                   <MagnifyingGlass weight="bold" />
@@ -2426,6 +2538,28 @@ export default function Page() {
                   onExportMonth={exportPaymentMonth}
                   onExportYear={exportPaymentYear}
                   exportBusy={paymentExportBusy}
+                  query={paymentQuery}
+                />
+              ) : paymentTab === "today" ? (
+                <TodayDue
+                  data={todayList}
+                  busy={todayLoading}
+                  pending={todayPending}
+                  raises={raises}
+                  onRaise={(suggestion) => setModal({ type: "raise", suggestion })}
+                  onMark={markTodayItem}
+                  onPay={(item) =>
+                    setModal(
+                      item
+                        ? {
+                            type: "payment",
+                            tenantId: item.tenantId,
+                            period: { month: item.month, year: item.year },
+                            amount: item.remaining,
+                          }
+                        : { type: "payment", tenantId: null }
+                    )
+                  }
                   query={paymentQuery}
                 />
               ) : (
@@ -2701,7 +2835,8 @@ export default function Page() {
         <PaymentSheet
           tenantId={modal.tenantId}
           tenants={tenants}
-          period={data.period}
+          period={modal.period || data.period}
+          amount={modal.amount}
           date={modal.date}
           token={token}
           onClose={() => setModal(null)}

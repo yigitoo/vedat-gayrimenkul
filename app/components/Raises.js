@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, CheckCircle, Info, Scales, TrendUp, WarningCircle } from "@phosphor-icons/react";
+import { ArrowRight, Calculator, CheckCircle, Clock, Info, Scales, TrendUp, WarningCircle } from "@phosphor-icons/react";
 import { SheetFrame } from "./Sheets";
 import MoneyField from "./MoneyField";
 import { apiRequest, formatCurrency, formatDate, isPrivate, parseMoney } from "../lib/client";
@@ -93,37 +93,47 @@ export function RaiseSuggestions({ raises, onOpen, compact = false }) {
   );
 }
 
-/* ---------- Onay penceresi ----------
-   Üç seçenek, biri seçili gelir: TÜFE ile (yasal üst sınır), sözleşmedeki
-   oran (daha düşükse) ya da elle tutar. Uygulanınca eski tutar kira
-   geçmişinde kalır; "Şimdilik değil" bu kira yılı için öneriyi kapatır. */
+/* ---------- Zam penceresi ----------
+   Kira yılı (12 ay) dolunca açılır. Önce o ayki zam oranı sorulur; oran
+   yazılınca yeni kira anında hesaplanır, ama kaydedilecek tutarı sen
+   girersin ("Hesaplananı yaz" yalnız kolaylık). "Bekle" pencereyi kapatır,
+   öneri beklemede kalır; tutar yazılıp kaydedilince yeni kira geçerlilik
+   tarihinden itibaren 12 aylık tabloya işlenir, eski tutar geçmişte kalır. */
+
+function parseRate(value) {
+  const text = String(value ?? "").trim().replace("%", "").replace(",", ".");
+  if (!text) return NaN;
+  const rate = Number(text);
+  return Number.isFinite(rate) && rate >= 0 && rate <= 200 ? rate : NaN;
+}
 
 export function RaiseSheet({ suggestion, token, onClose, onDone }) {
-  const options = [
-    { key: "cpi", label: "TÜFE ile", hint: rateLabel(suggestion), amount: suggestion.suggestedRent },
-    suggestion.contractRateRent
-      ? { key: "contract", label: "Sözleşme oranı", hint: "daha düşük", amount: suggestion.contractRateRent }
-      : null,
-    { key: "custom", label: "Elle tutar", hint: "kendin yaz", amount: null },
-  ].filter(Boolean);
-
-  const [choice, setChoice] = useState("cpi");
-  const [custom, setCustom] = useState(String(suggestion.suggestedRent || ""));
+  const [rateInput, setRateInput] = useState("");
+  const [amountInput, setAmountInput] = useState("");
   const [effectiveFrom, setEffectiveFrom] = useState(String(suggestion.anniversary || "").slice(0, 10));
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
 
-  const selected = options.find((item) => item.key === choice) || options[0];
-  const amount = choice === "custom" ? parseMoney(custom) : selected.amount;
+  const rate = parseRate(rateInput);
+  const rateValid = Number.isFinite(rate);
+  const rateTouched = rateInput.trim() !== "";
+  const calculated = rateValid ? Math.round(suggestion.currentRent * (1 + rate / 100)) : null;
+
+  const amount = amountInput.trim() ? parseMoney(amountInput) : NaN;
   const valid = Number.isFinite(amount) && amount > 0;
   const diff = valid ? amount - suggestion.currentRent : 0;
   const percent = valid && suggestion.currentRent ? (diff / suggestion.currentRent) * 100 : 0;
   const overCap = valid && suggestion.maxLegalRent && amount > suggestion.maxLegalRent;
+  const finished = suggestion.daysUntil <= 0;
 
   async function apply(event) {
     event.preventDefault();
+    if (rateTouched && !rateValid) {
+      setError("Zam oranını 0 ile 200 arasında yaz. Örnek: 35,5");
+      return;
+    }
     if (!valid) {
-      setError("Geçerli bir tutar yazın.");
+      setError("Yeni kira tutarını yaz.");
       return;
     }
     setBusy("apply");
@@ -137,12 +147,13 @@ export function RaiseSheet({ suggestion, token, onClose, onDone }) {
             action: "apply",
             tenantId: suggestion.tenantId,
             amount,
+            rate: rateValid ? rate : undefined,
             effectiveFrom: effectiveFrom || suggestion.anniversary,
           }),
         },
         token
       );
-      onDone(result, suggestion.name + " için yeni kira " + formatCurrency(amount) + " olarak kaydedildi.");
+      onDone(result, suggestion.name + " için yeni kira " + formatCurrency(amount) + " olarak 12 aylık tabloya işlendi.");
     } catch (requestError) {
       setError(requestError.message);
       setBusy("");
@@ -161,7 +172,7 @@ export function RaiseSheet({ suggestion, token, onClose, onDone }) {
         },
         token
       );
-      onDone(result, suggestion.name + " için öneri bu kira yılı kapatıldı.");
+      onDone(result, suggestion.name + " için bu kira yılı zam yapılmayacak.");
     } catch (requestError) {
       setError(requestError.message);
       setBusy("");
@@ -169,8 +180,14 @@ export function RaiseSheet({ suggestion, token, onClose, onDone }) {
   }
 
   return (
-    <SheetFrame eyebrow="Zam önerisi" title={suggestion.name} onClose={onClose}>
+    <SheetFrame eyebrow={finished ? "12 ay doldu · kira artışı" : "Kira artışı"} title={suggestion.name} onClose={onClose}>
       <form className="sheet-form raise-sheet" onSubmit={apply}>
+        <p className="raise-lead">
+          {finished
+            ? "Kira yılı " + formatDate(suggestion.anniversary) + " tarihinde doldu (" + (suggestion.paidMonths || 0) + "/12 ay ödendi). Yeni kirayı girersen 12 aylık tablo yeni tutarla başlar."
+            : "Kira yılı " + formatDate(suggestion.anniversary) + " tarihinde doluyor (" + whenText(suggestion.anniversary) + ")."}
+        </p>
+
         <div className="raise-compare">
           <div>
             <span>Şu anki kira</span>
@@ -182,39 +199,60 @@ export function RaiseSheet({ suggestion, token, onClose, onDone }) {
             <strong className="num">{valid ? formatCurrency(amount) : "—"}</strong>
             {valid && !isPrivate() ? (
               <small className="num">
-                +{formatCurrency(diff)} · %{percent.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}
+                {diff >= 0 ? "+" : "−"}{formatCurrency(Math.abs(diff))} · %{percent.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}
               </small>
             ) : null}
           </div>
         </div>
 
-        <div className="raise-options" role="radiogroup" aria-label="Zam yöntemi">
-          {options.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              role="radio"
-              aria-checked={choice === item.key}
-              className={"raise-option" + (choice === item.key ? " is-active" : "")}
-              onClick={() => setChoice(item.key)}
-            >
-              <strong>{item.label}</strong>
-              <span>{item.amount ? formatCurrency(item.amount) : item.hint}</span>
-              {item.amount ? <small>{item.hint}</small> : null}
-            </button>
-          ))}
+        <div className="field">
+          <label htmlFor="raise-rate">Bu ayki zam oranı (%)</label>
+          <input
+            id="raise-rate"
+            type="text"
+            inputMode="decimal"
+            autoComplete="off"
+            value={rateInput}
+            onChange={(event) => setRateInput(event.target.value)}
+            placeholder={suggestion.rate !== null && suggestion.rate !== undefined ? "TÜFE " + rateText(suggestion.rate).slice(1) : "Örnek: 35,5"}
+            aria-describedby="raise-rate-hint"
+            autoFocus
+          />
+          <p className="raise-calc" id="raise-rate-hint" aria-live="polite">
+            {rateTouched && !rateValid ? (
+              <span className="tone-bad"><WarningCircle weight="fill" />Oran okunamadı. Örnek: 35,5</span>
+            ) : calculated !== null ? (
+              <>
+                <span>
+                  <Calculator weight="bold" />
+                  {rateText(rate)} ile hesaplanan: <strong className="num">{formatCurrency(calculated)}</strong>
+                </span>
+                <button
+                  className="btn btn-quiet btn-sm"
+                  type="button"
+                  onClick={() => setAmountInput(String(calculated))}
+                >
+                  Hesaplananı yaz
+                </button>
+              </>
+            ) : (
+              <span>
+                Oranı yaz, yeni kira anında hesaplansın.
+                {suggestion.rate !== null && suggestion.rate !== undefined ? " Son TÜFE: " + rateLabel(suggestion) + "." : ""}
+              </span>
+            )}
+          </p>
         </div>
 
-        {choice === "custom" ? (
-          <MoneyField
-            label="Yeni aylık kira"
-            value={custom}
-            onChange={setCustom}
-            kind="rent"
-            autoFocus
-            required
-          />
-        ) : null}
+        <MoneyField
+          id="raise-amount"
+          label="Yeni aylık kira"
+          hint="Kaydedilecek tutarı sen yaz."
+          value={amountInput}
+          onChange={setAmountInput}
+          kind="rent"
+          required
+        />
 
         <div className="field">
           <label htmlFor="raise-from">Geçerlilik tarihi</label>
@@ -227,17 +265,13 @@ export function RaiseSheet({ suggestion, token, onClose, onDone }) {
         </div>
 
         <ul className="raise-notes">
-          <li>
-            <Scales weight="bold" />
-            <span>
-              Konut kirasında artış, önceki kira yılının 12 aylık ortalama TÜFE değişimini aşamaz (TBK 344).
-              Üst sınır: <strong className="num">{formatCurrency(suggestion.maxLegalRent || suggestion.suggestedRent)}</strong>
-            </span>
-          </li>
-          {suggestion.rateIsProvisional ? (
+          {suggestion.maxLegalRent ? (
             <li>
-              <Info weight="bold" />
-              <span>Kira yılının ait olduğu ayın oranı henüz açıklanmadı; en son açıklanan oran ({rateLabel(suggestion)}) kullanıldı.</span>
+              <Scales weight="bold" />
+              <span>
+                Konut kirasında artış, önceki kira yılının 12 aylık ortalama TÜFE değişimini aşamaz (TBK 344).
+                Üst sınır: <strong className="num">{formatCurrency(suggestion.maxLegalRent)}</strong>
+              </span>
             </li>
           ) : null}
           {suggestion.fiveYearNote ? (
@@ -264,22 +298,27 @@ export function RaiseSheet({ suggestion, token, onClose, onDone }) {
           </p>
         ) : null}
 
+        <button
+          className={"btn btn-quiet btn-sm raise-skip" + (busy === "dismiss" ? " is-busy" : "")}
+          type="button"
+          onClick={dismiss}
+          disabled={Boolean(busy)}
+        >
+          Bu yıl zam yapma
+        </button>
+
         <div className="sheet-actions">
-          <button
-            className={"btn btn-quiet" + (busy === "dismiss" ? " is-busy" : "")}
-            type="button"
-            onClick={dismiss}
-            disabled={Boolean(busy)}
-          >
-            Şimdilik değil
+          <button className="btn btn-glass" type="button" onClick={onClose} disabled={Boolean(busy)}>
+            <Clock weight="bold" />
+            Bekle
           </button>
           <button
             className={"btn btn-primary" + (busy === "apply" ? " is-busy" : "")}
             type="submit"
-            disabled={Boolean(busy) || !valid}
+            disabled={Boolean(busy) || !valid || (rateTouched && !rateValid)}
           >
             <CheckCircle weight="bold" />
-            Onayla ve uygula
+            Kaydet ve işle
           </button>
         </div>
       </form>

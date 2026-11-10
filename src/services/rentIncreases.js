@@ -189,25 +189,38 @@ function requestError(message, status = 400) {
 }
 
 /* Öneriyi onayla: tenants.js'teki computeRaise ile aynı zam kaydı düşer. */
-async function applySuggestion({ tenantId, amount, effectiveFrom }, { reference = now() } = {}) {
+async function applySuggestion({ tenantId, amount, effectiveFrom, rate }, { reference = now() } = {}) {
   // tenants.js tembel yüklenir; API yönlendiricisi de böyle çalışıyor.
   const { computeRaise } = require('../api/tenants');
   const [suggestion] = await getSuggestions({ reference, tenantId });
   if (!suggestion) throw requestError('Bu kiracı için bekleyen bir artış önerisi yok.', 404);
-  if (suggestion.rate === null) throw requestError('Kayıtlı TÜFE oranı yok; önce oranı girin.');
+
+  /* Oranı kullanıcı yazar (o ayki zam oranı); yazmazsa kayıtlı TÜFE oranı
+     yalnız not için kullanılır. Tutar her durumda kullanıcıdan gelir; TÜFE
+     önerisine düşmek yalnız eski istemciler için. */
+  const userRate = rate === undefined || rate === null || String(rate).trim() === ''
+    ? null
+    : Number(String(rate).replace(',', '.'));
+  if (userRate !== null && (!Number.isFinite(userRate) || userRate < 0 || userRate > 200)) {
+    throw requestError('Zam oranı 0 ile 200 arasında olmalı.');
+  }
 
   const value = amount === undefined || amount === null || amount === '' ? suggestion.suggestedRent : amount;
   const numeric = Number(String(value).replace(/\./g, '').replace(',', '.'));
   if (!Number.isFinite(numeric) || numeric <= 0) throw requestError('Yeni kira tutarı sıfırdan büyük olmalı.');
 
   const tenant = await Tenant.findById(tenantId);
-  const rateText = String(suggestion.rate).replace('.', ',');
+  const note = userRate !== null
+    ? 'Yıllık artış %' + String(userRate).replace('.', ',')
+    : suggestion.rate !== null
+      ? 'TÜFE %' + String(suggestion.rate).replace('.', ',') + ' (' + suggestion.rateLabel + ') ile yıllık artış'
+      : 'Yıllık artış';
   let raise;
   try {
     raise = computeRaise(tenant, {
       amount: value,
       effectiveFrom: effectiveFrom || suggestion.anniversary,
-      note: 'TÜFE %' + rateText + ' (' + suggestion.rateLabel + ') ile yıllık artış',
+      note,
     });
   } catch (error) {
     throw requestError(error.message);
@@ -218,7 +231,7 @@ async function applySuggestion({ tenantId, amount, effectiveFrom }, { reference 
   await tenant.save();
   const notification = await notifyRentIncreased(tenant, raise);
 
-  const warning = raise.amount > suggestion.maxLegalRent
+  const warning = suggestion.maxLegalRent && raise.amount > suggestion.maxLegalRent
     ? 'Yeni kira TÜFE tavanını (' + new Intl.NumberFormat('tr-TR').format(suggestion.maxLegalRent) + ' TL) aşıyor.'
     : null;
   return { applied: { tenantId, amount: raise.amount, previousAmount: raise.previousAmount, effectiveFrom: raise.effectiveFrom.toISOString() }, warning, notification };

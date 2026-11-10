@@ -4189,3 +4189,68 @@ body, .rail, .topbar, .tile, .panel, .row, .btn, .rail-link, .tab {
   animation: screen-in var(--t-enter) var(--ease-out) backwards;
 }
 .offline-strip svg { width: 16px; height: 16px; flex: none; }
+
+/* ---------- 53. Ödemeler › Bugün ve zam penceresi ---------- */
+.today-view { gap: var(--a-6); }
+.today-section { display: grid; gap: var(--a-3); }
+.today-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--a-3);
+  padding-inline: var(--a-1);
+}
+.today-head h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--a-2);
+  margin: 0;
+  font-size: var(--fs-base);
+  font-weight: 700;
+}
+.today-head h2 svg { width: 18px; height: 18px; color: var(--accent); }
+.today-head.is-late h2 svg { color: var(--bad); }
+.today-head > strong { font-size: var(--fs-base); font-weight: 700; color: var(--text-2); }
+.today-head.is-late > strong { color: var(--bad); }
+
+.filter-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: var(--a-1);
+  padding-inline: 5px;
+  border-radius: var(--r-full);
+  background: var(--bad-soft);
+  color: var(--bad);
+  font-size: 11px;
+  font-weight: 700;
+}
+.filter.is-active .filter-count { background: var(--accent-on); color: var(--accent); }
+
+.raise-lead { margin: 0; color: var(--text-2); font-size: var(--fs-sm); }
+.raise-calc {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--a-2);
+  margin: var(--a-1) 0 0;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.raise-calc > span { display: inline-flex; align-items: center; gap: 6px; }
+.raise-calc svg { width: 16px; height: 16px; flex: none; }
+.raise-calc strong { color: var(--text); }
+.raise-skip { justify-self: start; color: var(--text-3); }
+
+@media (max-width: 720px) {
+  .today-view { gap: var(--a-5); }
+  .raise-calc .btn { width: 100%; }
+  /* Telefonda tutar sağ üstte, durum ve düğmeler altta tam genişlik. */
+  .today-view.payments-view .row { grid-template-columns: minmax(0, 1fr) auto; row-gap: var(--a-2); }
+  .today-view.payments-view .who { grid-column: 1; grid-row: 1; }
+  .today-view.payments-view .row-money { grid-column: 2; grid-row: 1; align-self: start; }
+  .today-view.payments-view .row-status { grid-column: 1 / -1; grid-row: 2; }
+  .today-view.payments-view .row-actions { grid-column: 1 / -1; grid-row: 3; }
+}

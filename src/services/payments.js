@@ -1,3 +1,4 @@
+const dayjs = require('dayjs');
 const Tenant = require('../models/tenant');
 const Payment = require('../models/payment');
 const { now } = require('../utils/format');
@@ -161,8 +162,73 @@ async function loadYearGrid(year) {
   return buildYearGrid({ year, tenants, payments });
 }
 
+/* "Bugün tahsil edilecekler": son günü bugün olan açık dönemler ve son günü
+   geçmiş, tam ödenmemiş dönemler. Geçen yıldan kalan gecikme de görünsün
+   diye bu yıl ile önceki yılın çizelgesi birlikte taranır. */
+async function loadTodayList({ reference = now() } = {}) {
+  const year = reference.year();
+  const years = [year - 1, year];
+  const [tenants, payments] = await Promise.all([
+    Tenant.find({ isActive: true }).sort({ name: 1 }),
+    Payment.find({ year: { $in: years } }),
+  ]);
+
+  const today = [];
+  const overdue = [];
+  let paidToday = 0;
+  const todayIso = reference.format('YYYY-MM-DD');
+
+  for (const gridYear of years) {
+    const grid = buildYearGrid({ year: gridYear, tenants, payments, reference: reference.toDate() });
+    for (const row of grid.rows) {
+      for (const cell of row.months) {
+        if (!cell.inside || cell.expected <= 0) continue;
+        if (cell.status === 'paid') {
+          if (cell.lastDate && dayjs(cell.lastDate).utcOffset(3).format('YYYY-MM-DD') === todayIso) paidToday += cell.paid;
+          continue;
+        }
+        if (cell.remaining <= 0) continue;
+        const item = {
+          tenantId: row.tenantId,
+          name: row.name,
+          address: row.address,
+          month: cell.month,
+          year: gridYear,
+          expected: cell.expected,
+          paid: cell.paid,
+          remaining: cell.remaining,
+          dueDate: cell.dueDate,
+          isDeferred: cell.isDeferred,
+          daysOverdue: Math.max(-cell.daysUntilDue, 0),
+          status: cell.daysUntilDue === 0 ? 'today' : 'overdue',
+        };
+        if (cell.daysUntilDue === 0) today.push(item);
+        else if (cell.daysUntilDue < 0) overdue.push(item);
+      }
+    }
+  }
+
+  today.sort((a, b) => a.name.localeCompare(b.name, 'tr'));
+  overdue.sort((a, b) => b.daysOverdue - a.daysOverdue || a.name.localeCompare(b.name, 'tr'));
+  const sum = (list) => list.reduce((total, item) => total + item.remaining, 0);
+
+  return {
+    date: reference.toDate().toISOString(),
+    today,
+    overdue,
+    totals: {
+      todayCount: today.length,
+      todayAmount: sum(today),
+      overdueCount: overdue.length,
+      overdueAmount: sum(overdue),
+      paidToday,
+    },
+  };
+}
+
 module.exports = {
   clearPeriod,
+  loadTodayList,
   loadYearGrid,
   markPeriodPaid,
   periodSummary,
