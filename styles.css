@@ -4271,3 +4271,8 @@ body, .rail, .topbar, .tile, .panel, .row, .btn, .rail-link, .tab {
   font-size: var(--fs-sm);
 }
 .raise-archive-note svg { width: 16px; height: 16px; flex: none; margin-top: 2px; color: var(--bad); }
+
+/* Takvim özeti: tahsilat çizgisinin yanında yüzde */
+.pulse-track { display: flex; align-items: center; gap: var(--a-3); }
+.pulse-track .pulse-bar { flex: 1 1 auto; }
+.pulse-rate { flex: none; min-width: 4ch; text-align: right; font-size: var(--fs-sm); font-weight: 700; color: var(--text-2); }

@@ -538,8 +538,11 @@ function MonthPulse({ metrics, period }) {
           </div>
         ))}
       </div>
-      <div className="pulse-bar" role="img" aria-label={"Tahsilat oranı yüzde " + rate}>
-        <i style={{ width: rate + "%" }} />
+      <div className="pulse-track">
+        <div className="pulse-bar" role="img" aria-label={"Tahsilat oranı yüzde " + rate}>
+          <i style={{ width: rate + "%" }} />
+        </div>
+        <span className={"pulse-rate num" + (rate >= 100 ? " tone-ok" : "")} aria-hidden="true">%{rate}</span>
       </div>
     </section>
   );
