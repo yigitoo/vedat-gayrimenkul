@@ -514,7 +514,13 @@ function MonthPulse({ metrics, period }) {
       meta: metrics.overdueCount ? metrics.overdueCount + " geciken" : metrics.upcomingCount + " yaklaşan",
       tone: metrics.overdueCount ? "bad" : "warn",
     },
-    { key: "expense", label: "Gider", value: metrics.totalExpense, meta: "aidat dahil" },
+    {
+      key: "unpaid",
+      label: "Ödenmemiş kira",
+      count: Math.max((metrics.tenantCount || 0) - (metrics.paidCount || 0), 0),
+      meta: (metrics.overdueCount || 0) + " geciken",
+      tone: metrics.overdueCount ? "bad" : undefined,
+    },
     { key: "net", label: "Net", value: metrics.netIncome, meta: "tahsilat − gider", tone: metrics.netIncome >= 0 ? "accent" : "bad" },
   ];
 
@@ -527,7 +533,7 @@ function MonthPulse({ metrics, period }) {
               <i aria-hidden="true" />
               {item.label}
             </span>
-            <strong className="num">{formatCurrency(item.value)}</strong>
+            <strong className="num">{item.count !== undefined ? item.count : formatCurrency(item.value)}</strong>
             <small>{item.meta}</small>
           </div>
         ))}
