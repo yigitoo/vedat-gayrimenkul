@@ -128,7 +128,7 @@ const MONTH_LONG = [
 const VIEWS = [
   { id: "overview", label: "Özet", icon: SquaresFour, lead: "Dönemin tahsilat resmi ve sıradaki ödemeler.", primary: true, group: "Genel" },
   { id: "calendar", label: "Takvim", icon: CalendarBlank, lead: "Hangi gün kimden ne bekleniyor.", primary: true, group: "Genel" },
-  { id: "payments", label: "Ödemeler", icon: Wallet, lead: "Yıl tablosu, dönem defteri ve bugün tahsil edilecekler: kim ödedi, kim gecikti.", primary: true, group: "Kira" },
+  { id: "payments", label: "Ödemeler", icon: Wallet, lead: "Yıl tablosu, dönem defteri ve günlük tahsilat: kim ödedi, kim gecikti.", primary: true, group: "Kira" },
   { id: "tenants", label: "Kiracılar", icon: UsersThree, lead: "Sözleşmeler, kira tutarları ve zam önerileri.", primary: true, group: "Kira" },
   { id: "dues", label: "Aidat", icon: Buildings, lead: "Apartman ve site aidatı: hangi ay ödendi.", group: "Kira" },
   { id: "bus", label: "Otobüs", icon: Bus, lead: "Hat defteri: gün gün hasılat, mazot, yövmiye.", group: "İşletme" },
@@ -1313,7 +1313,7 @@ export default function Page() {
 
   const [view, setView] = useState("overview");
   const [filter, setFilter] = useState("all");
-  const [paymentTab, setPaymentTab] = useState("grid");
+  const [paymentTab, setPaymentTab] = useState("today");
   const [paymentQuery, setPaymentQuery] = useState("");
   const [gridYear, setGridYear] = useState(0);
   const [grid, setGrid] = useState(null);
@@ -2506,9 +2506,8 @@ export default function Page() {
                     className={"filter" + (paymentTab === "today" ? " is-active" : "")}
                     onClick={() => setPaymentTab("today")}
                     aria-pressed={paymentTab === "today"}
-                    aria-label="Bugün tahsil edilecekler"
                   >
-                    Bugün
+                    Günlük tahsilat
                     {todayList && todayList.totals.todayCount + todayList.totals.overdueCount > 0 ? (
                       <span className="filter-count num">
                         {todayList.totals.todayCount + todayList.totals.overdueCount}

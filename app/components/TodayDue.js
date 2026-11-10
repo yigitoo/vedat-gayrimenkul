@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarCheck, CheckCircle, Clock, MagnifyingGlass, Plus, Receipt, WarningCircle } from "@phosphor-icons/react";
+import { CalendarCheck, CheckCircle, Clock, MagnifyingGlass, Plus, Receipt, UserPlus, WarningCircle } from "@phosphor-icons/react";
 import { formatCurrency, formatDate, initials, matchesSearch, normalizeSearch } from "../lib/client";
 import { RaiseSuggestions } from "./Raises";
 
@@ -32,15 +32,25 @@ function DueRow({ item, index, pending, onMark, onPay }) {
             <WarningCircle weight="fill" />
             {item.daysOverdue} gün gecikti
           </span>
-        ) : (
+        ) : item.status === "today" ? (
           <span className="pill pill-calm">
             <Clock weight="fill" />
             Son gün bugün
           </span>
+        ) : item.status === "partial" ? (
+          <span className="pill pill-warn">
+            <WarningCircle weight="fill" />
+            Eksik ödeme
+          </span>
+        ) : (
+          <span className="pill pill-calm">
+            <UserPlus weight="fill" />
+            Bugün eklendi
+          </span>
         )}
         <span>
           {periodText(item)}
-          {isLate ? " · son gün " + formatDate(item.dueDate) : ""}
+          {item.status !== "today" ? " · son gün " + formatDate(item.dueDate) : ""}
           {item.isDeferred ? " · ertelendi" : ""}
           {partial ? " · " + formatCurrency(item.paid) + " ödendi" : ""}
         </span>
@@ -74,17 +84,17 @@ function DueRow({ item, index, pending, onMark, onPay }) {
   );
 }
 
-/* Ödemeler › Bugün: takvimde bugünün tarihine düşen tahsilatlar alt alta,
-   altında da son günü geçmiş dönemler. Yıl tablosu olduğu gibi kalır;
-   burası yalnız "bugün kimden ne alacağım" sorusunu cevaplar. */
+/* Ödemeler › Günlük tahsilat: son günü bugün olanlar, eksik ödenenler ve
+   bugün eklenen kiracılar alt alta; altında son günü geçmiş dönemler. Ay tam
+   ödenince satır listeden düşer. Yıl tablosu olduğu gibi kalır. */
 export default function TodayDue({ data, busy, pending, raises, onRaise, onMark, onPay, query = "" }) {
   if (!data) {
     return (
       <div className="view" aria-busy="true">
         <div className="empty">
           <Clock weight="duotone" />
-          <strong>Bugünün listesi hazırlanıyor</strong>
-          <span>Son günü bugün olan ve geciken dönemler toplanıyor.</span>
+          <strong>Günlük tahsilat hazırlanıyor</strong>
+          <span>Bugünkü, eksik ve geciken dönemler toplanıyor.</span>
         </div>
       </div>
     );
@@ -100,7 +110,7 @@ export default function TodayDue({ data, busy, pending, raises, onRaise, onMark,
     <div className="view payments-view today-view" data-busy={busy} aria-busy={busy}>
       <div className="view-bar">
         <p className="view-summary">
-          {formatDate(data.date)} · {totals.todayCount || 0} tahsilat bugün · {totals.overdueCount || 0} geciken
+          {formatDate(data.date)} · {totals.todayCount || 0} tahsilat · {totals.overdueCount || 0} geciken
           {totals.paidToday ? " · bugün " + formatCurrency(totals.paidToday) + " alındı" : ""}
         </p>
         <div className="view-actions">
@@ -117,7 +127,7 @@ export default function TodayDue({ data, busy, pending, raises, onRaise, onMark,
         <header className="today-head">
           <h2 id="today-due-title">
             <CalendarCheck weight="bold" />
-            Bugün tahsil edilecekler
+            Günlük tahsilat
           </h2>
           <strong className="num">{formatCurrency(totals.todayAmount || 0)}</strong>
         </header>
@@ -136,8 +146,8 @@ export default function TodayDue({ data, busy, pending, raises, onRaise, onMark,
           ) : (
             <div className="empty">
               {needle ? <MagnifyingGlass weight="duotone" /> : <CheckCircle weight="duotone" />}
-              <strong>{needle ? "Eşleşen tahsilat yok" : "Bugün son günü olan kira yok"}</strong>
-              <span>{needle ? "Aramayı temizleyip tekrar bak." : "Yaklaşanları yıl tablosunda görebilirsin."}</span>
+              <strong>{needle ? "Eşleşen tahsilat yok" : "Bugün tahsil edilecek kira yok"}</strong>
+              <span>{needle ? "Aramayı temizleyip tekrar bak." : "Son günü bugün olan ya da eksik ödenen dönem yok."}</span>
             </div>
           )}
         </div>
