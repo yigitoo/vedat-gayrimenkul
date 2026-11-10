@@ -2804,13 +2804,31 @@ export default function Page() {
           suggestion={modal.suggestion}
           token={token}
           onClose={() => setModal(null)}
-          onDone={async (result, message) => {
+          onDone={async (result, message, undo) => {
             setModal(null);
             if (result) setRaises((current) => ({ ...(current || {}), ...result }));
             setRaiseStamp((value) => value + 1);
-            // Yeni kira bakiyeleri değiştirir: yıl tablosu ve Bugün listesi tazelensin.
+            // Yeni kira bakiyeleri değiştirir: yıl tablosu ve günlük liste tazelensin.
             setGridStamp((value) => value + 1);
-            setFlash({ tone: "ok", message });
+            setFlash({
+              tone: "ok",
+              message,
+              action: undo
+                ? {
+                    label: undo.label,
+                    run: async () => {
+                      try {
+                        await undo.run();
+                        setRaiseStamp((value) => value + 1);
+                        setGridStamp((value) => value + 1);
+                        await reload();
+                      } catch (error) {
+                        setFlash({ tone: "bad", message: error.message });
+                      }
+                    },
+                  }
+                : null,
+            });
             await reload();
           }}
         />

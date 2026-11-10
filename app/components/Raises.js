@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Calculator, CheckCircle, Clock, Info, Scales, TrendUp, WarningCircle } from "@phosphor-icons/react";
+import { Archive, ArrowRight, CheckCircle, Clock, Info, Scales, TrendUp, WarningCircle } from "@phosphor-icons/react";
 import { SheetFrame } from "./Sheets";
 import MoneyField from "./MoneyField";
 import { apiRequest, formatCurrency, formatDate, isPrivate, parseMoney } from "../lib/client";
@@ -94,32 +94,27 @@ export function RaiseSuggestions({ raises, onOpen, compact = false }) {
 }
 
 /* ---------- Zam penceresi ----------
-   Kira yılı (12 ay) dolunca, yılda bir kez açılır. Önce yıllık zam oranı sorulur; oran
-   yazılınca yeni kira anında hesaplanır, ama kaydedilecek tutarı sen
-   girersin ("Hesaplananı yaz" yalnız kolaylık). "Bekle" pencereyi kapatır,
-   öneri beklemede kalır; tutar yazılıp kaydedilince yeni kira geçerlilik
-   tarihinden itibaren 12 aylık tabloya işlenir, eski tutar geçmişte kalır. */
-
-function parseRate(value) {
-  const text = String(value ?? "").trim().replace("%", "").replace(",", ".");
-  if (!text) return NaN;
-  const rate = Number(text);
-  return Number.isFinite(rate) && rate >= 0 && rate <= 200 ? rate : NaN;
-}
+   Kira yılı (12 ay) dolunca ya da İncele'ye basınca açılır. Üç seçenek:
+   - TÜFE tavsiyesi: o ayın Türkiye TÜFE oranına (12 aylık ortalama, TBK 344
+     tavanı) göre hesaplanan fiyat,
+   - Elle yeni fiyat: tutarı sen yazarsın,
+   - Kiracı çıkıyor: kiracı arşive gider (geri alınabilir).
+   Onaylanınca yeni kira geçerlilik tarihinden itibaren 12 aylık tabloya
+   işlenir, eski tutar kira geçmişinde kalır. "Bekle" öneriyi beklemede
+   bırakır. */
 
 export function RaiseSheet({ suggestion, token, onClose, onDone }) {
-  const [rateInput, setRateInput] = useState("");
+  const hasCpi = suggestion.rate !== null && suggestion.rate !== undefined && suggestion.suggestedRent > 0;
+  const [choice, setChoice] = useState(hasCpi ? "cpi" : "manual");
   const [amountInput, setAmountInput] = useState("");
   const [effectiveFrom, setEffectiveFrom] = useState(String(suggestion.anniversary || "").slice(0, 10));
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
 
-  const rate = parseRate(rateInput);
-  const rateValid = Number.isFinite(rate);
-  const rateTouched = rateInput.trim() !== "";
-  const calculated = rateValid ? Math.round(suggestion.currentRent * (1 + rate / 100)) : null;
-
-  const amount = amountInput.trim() ? parseMoney(amountInput) : NaN;
+  const isArchive = choice === "archive";
+  const amount = choice === "cpi"
+    ? suggestion.suggestedRent
+    : choice === "manual" && amountInput.trim() ? parseMoney(amountInput) : NaN;
   const valid = Number.isFinite(amount) && amount > 0;
   const diff = valid ? amount - suggestion.currentRent : 0;
   const percent = valid && suggestion.currentRent ? (diff / suggestion.currentRent) * 100 : 0;
@@ -129,8 +124,8 @@ export function RaiseSheet({ suggestion, token, onClose, onDone }) {
 
   async function apply(event) {
     event.preventDefault();
-    if (rateTouched && !rateValid) {
-      setError("Zam oranını 0 ile 200 arasında yaz. Örnek: 35,5");
+    if (isArchive) {
+      await archive();
       return;
     }
     if (!valid) {
@@ -140,6 +135,7 @@ export function RaiseSheet({ suggestion, token, onClose, onDone }) {
     setBusy("apply");
     setError("");
     try {
+      const rate = choice === "cpi" ? suggestion.rate : Math.round(percent * 10) / 10;
       const result = await apiRequest(
         "/api/rent-increases",
         {
@@ -148,13 +144,28 @@ export function RaiseSheet({ suggestion, token, onClose, onDone }) {
             action: "apply",
             tenantId: suggestion.tenantId,
             amount,
-            rate: rateValid ? rate : undefined,
+            rate: choice === "cpi" || rate < 0 ? undefined : rate,
             effectiveFrom: effectiveFrom || suggestion.anniversary,
           }),
         },
         token
       );
       onDone(result, suggestion.name + " için yeni kira " + formatCurrency(amount) + " olarak 12 aylık tabloya işlendi.");
+    } catch (requestError) {
+      setError(requestError.message);
+      setBusy("");
+    }
+  }
+
+  async function archive() {
+    setBusy("apply");
+    setError("");
+    try {
+      await apiRequest("/api/tenants?id=" + suggestion.tenantId, { method: "DELETE" }, token);
+      onDone(null, suggestion.name + " arşive gönderildi.", {
+        label: "Geri al",
+        run: () => apiRequest("/api/tenants?id=" + suggestion.tenantId + "&action=restore", { method: "PATCH" }, token),
+      });
     } catch (requestError) {
       setError(requestError.message);
       setBusy("");
@@ -180,119 +191,133 @@ export function RaiseSheet({ suggestion, token, onClose, onDone }) {
     }
   }
 
+  const options = [
+    {
+      key: "cpi",
+      label: "TÜFE tavsiyesi",
+      value: hasCpi ? formatCurrency(suggestion.suggestedRent) : "Oran yok",
+      hint: hasCpi ? rateLabel(suggestion) + (suggestion.rateIsProvisional ? " · geçici" : "") : "Ayarlar'dan TÜFE oranını gir",
+      disabled: !hasCpi,
+    },
+    { key: "manual", label: "Elle yeni fiyat", value: "Kendin yaz", hint: "anlaştığınız tutar" },
+    { key: "archive", label: "Kiracı çıkıyor", value: "Arşive gönder", hint: "geçmiş korunur" },
+  ];
+
   return (
     <SheetFrame eyebrow={full ? "12 ay doldu · kira artışı" : "Kira artışı"} title={suggestion.name} onClose={onClose}>
       <form className="sheet-form raise-sheet" onSubmit={apply}>
         <p className="raise-lead">
           {finished
-            ? "Kira yılı " + formatDate(suggestion.anniversary) + " tarihinde doldu (" + (suggestion.paidMonths || 0) + "/12 ay ödendi). Zam yılda bir yapılır: yeni kirayı girersen sonraki 12 ay bu tutarla işlenir."
+            ? "Kira yılı " + formatDate(suggestion.anniversary) + " tarihinde doldu (" + (suggestion.paidMonths || 0) + "/12 ay ödendi)."
             : suggestion.allPaid
-              ? "12 aylık tablo doldu (12/12 ay ödendi). Kira yılı " + formatDate(suggestion.anniversary) + " tarihinde yenileniyor. Zam yılda bir yapılır: yeni kirayı girersen sonraki 12 ay bu tutarla işlenir."
+              ? "12 aylık tablo doldu (12/12 ay ödendi). Kira yılı " + formatDate(suggestion.anniversary) + " tarihinde yenileniyor."
               : "Kira yılı " + formatDate(suggestion.anniversary) + " tarihinde doluyor (" + whenText(suggestion.anniversary) + ")."}
+          {" "}Zam yılda bir yapılır; onaylarsan sonraki 12 ay yeni tutarla işlenir.
         </p>
 
-        <div className="raise-compare">
-          <div>
-            <span>Şu anki kira</span>
-            <strong className="num">{formatCurrency(suggestion.currentRent)}</strong>
-          </div>
-          <ArrowRight weight="bold" aria-hidden="true" />
-          <div className="is-new">
-            <span>Yeni kira</span>
-            <strong className="num">{valid ? formatCurrency(amount) : "—"}</strong>
-            {valid && !isPrivate() ? (
-              <small className="num">
-                {diff >= 0 ? "+" : "−"}{formatCurrency(Math.abs(diff))} · %{percent.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}
-              </small>
-            ) : null}
-          </div>
+        <div className="raise-options" role="radiogroup" aria-label="Ne yapılsın">
+          {options.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              role="radio"
+              aria-checked={choice === item.key}
+              disabled={item.disabled}
+              className={"raise-option" + (choice === item.key ? " is-active" : "") + (item.key === "archive" ? " is-archive" : "")}
+              onClick={() => {
+                setChoice(item.key);
+                setError("");
+              }}
+            >
+              <strong>{item.label}</strong>
+              <span className="num">{item.value}</span>
+              <small>{item.hint}</small>
+            </button>
+          ))}
         </div>
 
-        <div className="field">
-          <label htmlFor="raise-rate">Yıllık zam oranı (%)</label>
-          <input
-            id="raise-rate"
-            type="text"
-            inputMode="decimal"
-            autoComplete="off"
-            value={rateInput}
-            onChange={(event) => setRateInput(event.target.value)}
-            placeholder={suggestion.rate !== null && suggestion.rate !== undefined ? "TÜFE " + rateText(suggestion.rate).slice(1) : "Örnek: 35,5"}
-            aria-describedby="raise-rate-hint"
-            autoFocus
-          />
-          <p className="raise-calc" id="raise-rate-hint" aria-live="polite">
-            {rateTouched && !rateValid ? (
-              <span className="tone-bad"><WarningCircle weight="fill" />Oran okunamadı. Örnek: 35,5</span>
-            ) : calculated !== null ? (
-              <>
-                <span>
-                  <Calculator weight="bold" />
-                  {rateText(rate)} ile hesaplanan: <strong className="num">{formatCurrency(calculated)}</strong>
-                </span>
-                <button
-                  className="btn btn-quiet btn-sm"
-                  type="button"
-                  onClick={() => setAmountInput(String(calculated))}
-                >
-                  Hesaplananı yaz
-                </button>
-              </>
-            ) : (
-              <span>
-                Yıllık oranı yaz, yeni kira anında hesaplansın.
-                {suggestion.rate !== null && suggestion.rate !== undefined ? " Son TÜFE: " + rateLabel(suggestion) + "." : ""}
-              </span>
-            )}
+        {isArchive ? (
+          <p className="raise-archive-note">
+            <Archive weight="bold" />
+            {suggestion.name} arşive gider: ödeme geçmişi korunur, toplamlara ve listelere girmez. İstediğin zaman Kiracılar › Arşiv'den geri alabilirsin.
           </p>
-        </div>
+        ) : (
+          <>
+            <div className="raise-compare">
+              <div>
+                <span>Şu anki kira</span>
+                <strong className="num">{formatCurrency(suggestion.currentRent)}</strong>
+              </div>
+              <ArrowRight weight="bold" aria-hidden="true" />
+              <div className="is-new">
+                <span>Yeni kira</span>
+                <strong className="num">{valid ? formatCurrency(amount) : "—"}</strong>
+                {valid && !isPrivate() ? (
+                  <small className="num">
+                    {diff >= 0 ? "+" : "−"}{formatCurrency(Math.abs(diff))} · %{percent.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}
+                  </small>
+                ) : null}
+              </div>
+            </div>
 
-        <MoneyField
-          id="raise-amount"
-          label="Yeni aylık kira"
-          hint="Kaydedilecek tutarı sen yaz."
-          value={amountInput}
-          onChange={setAmountInput}
-          kind="rent"
-          required
-        />
+            {choice === "manual" ? (
+              <MoneyField
+                id="raise-amount"
+                label="Yeni aylık kira"
+                hint={hasCpi ? "TÜFE tavsiyesi: " + formatCurrency(suggestion.suggestedRent) : "Kaydedilecek tutarı yaz."}
+                value={amountInput}
+                onChange={setAmountInput}
+                kind="rent"
+                autoFocus
+                required
+              />
+            ) : null}
 
-        <div className="field">
-          <label htmlFor="raise-from">Geçerlilik tarihi</label>
-          <input
-            id="raise-from"
-            type="date"
-            value={effectiveFrom}
-            onChange={(event) => setEffectiveFrom(event.target.value)}
-          />
-        </div>
+            <div className="field">
+              <label htmlFor="raise-from">Geçerlilik tarihi</label>
+              <input
+                id="raise-from"
+                type="date"
+                value={effectiveFrom}
+                onChange={(event) => setEffectiveFrom(event.target.value)}
+              />
+            </div>
 
-        <ul className="raise-notes">
-          {suggestion.maxLegalRent ? (
-            <li>
-              <Scales weight="bold" />
-              <span>
-                Konut kirasında artış, önceki kira yılının 12 aylık ortalama TÜFE değişimini aşamaz (TBK 344).
-                Üst sınır: <strong className="num">{formatCurrency(suggestion.maxLegalRent)}</strong>
-              </span>
-            </li>
-          ) : null}
-          {suggestion.fiveYearNote ? (
-            <li>
-              <Info weight="bold" />
-              <span>
-                Kiracılık {suggestion.yearsOfTenancy} yılı doldurdu: 5 yıldan sonra kira, emsal ve hakkaniyete göre
-                yeniden belirlenebilir (anlaşma ya da kira tespit davası).
-              </span>
-            </li>
-          ) : null}
-          {overCap ? (
-            <li className="is-warn">
-              <WarningCircle weight="fill" />
-              <span>Bu tutar TÜFE sınırını aşıyor. Konut kirası için aşan kısım hukuken geçersiz sayılabilir.</span>
-            </li>
-          ) : null}
-        </ul>
+            <ul className="raise-notes">
+              {hasCpi ? (
+                <li>
+                  <Scales weight="bold" />
+                  <span>
+                    Tavsiye, {MONTHS[(suggestion.rateMonth || 1) - 1]} {suggestion.rateYear} TÜFE 12 aylık ortalamasına (
+                    {rateText(suggestion.rate)}) göre hesaplandı. Konut kirasında yasal üst sınır (TBK 344):{" "}
+                    <strong className="num">{formatCurrency(suggestion.maxLegalRent || suggestion.suggestedRent)}</strong>
+                  </span>
+                </li>
+              ) : null}
+              {suggestion.rateIsProvisional && hasCpi ? (
+                <li>
+                  <Info weight="bold" />
+                  <span>Kira yılının ait olduğu ayın oranı henüz açıklanmadı; en son açıklanan oran kullanıldı.</span>
+                </li>
+              ) : null}
+              {suggestion.fiveYearNote ? (
+                <li>
+                  <Info weight="bold" />
+                  <span>
+                    Kiracılık {suggestion.yearsOfTenancy} yılı doldurdu: 5 yıldan sonra kira, emsal ve hakkaniyete göre
+                    yeniden belirlenebilir (anlaşma ya da kira tespit davası).
+                  </span>
+                </li>
+              ) : null}
+              {overCap ? (
+                <li className="is-warn">
+                  <WarningCircle weight="fill" />
+                  <span>Bu tutar TÜFE sınırını aşıyor. Konut kirası için aşan kısım hukuken geçersiz sayılabilir.</span>
+                </li>
+              ) : null}
+            </ul>
+          </>
+        )}
 
         {error ? (
           <p className="form-error" role="alert">
@@ -301,14 +326,16 @@ export function RaiseSheet({ suggestion, token, onClose, onDone }) {
           </p>
         ) : null}
 
-        <button
-          className={"btn btn-quiet btn-sm raise-skip" + (busy === "dismiss" ? " is-busy" : "")}
-          type="button"
-          onClick={dismiss}
-          disabled={Boolean(busy)}
-        >
-          Bu yıl zam yapma
-        </button>
+        {isArchive ? null : (
+          <button
+            className={"btn btn-quiet btn-sm raise-skip" + (busy === "dismiss" ? " is-busy" : "")}
+            type="button"
+            onClick={dismiss}
+            disabled={Boolean(busy)}
+          >
+            Bu yıl zam yapma
+          </button>
+        )}
 
         <div className="sheet-actions">
           <button className="btn btn-glass" type="button" onClick={onClose} disabled={Boolean(busy)}>
@@ -316,12 +343,12 @@ export function RaiseSheet({ suggestion, token, onClose, onDone }) {
             Bekle
           </button>
           <button
-            className={"btn btn-primary" + (busy === "apply" ? " is-busy" : "")}
+            className={"btn " + (isArchive ? "btn-danger" : "btn-primary") + (busy === "apply" ? " is-busy" : "")}
             type="submit"
-            disabled={Boolean(busy) || !valid || (rateTouched && !rateValid)}
+            disabled={Boolean(busy) || (!isArchive && !valid)}
           >
-            <CheckCircle weight="bold" />
-            Kaydet ve işle
+            {isArchive ? <Archive weight="bold" /> : <CheckCircle weight="bold" />}
+            {isArchive ? "Arşive gönder" : "Onayla ve işle"}
           </button>
         </div>
       </form>

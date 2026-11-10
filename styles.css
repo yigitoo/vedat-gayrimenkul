@@ -4254,3 +4254,20 @@ body, .rail, .topbar, .tile, .panel, .row, .btn, .rail-link, .tab {
   .today-view.payments-view .row-status { grid-column: 1 / -1; grid-row: 2; }
   .today-view.payments-view .row-actions { grid-column: 1 / -1; grid-row: 3; }
 }
+
+/* Zam penceresi: "Kiracı çıkıyor" seçeneği ve arşiv notu */
+.raise-option:disabled { opacity: 0.55; cursor: not-allowed; }
+.raise-option.is-archive.is-active { border-color: var(--bad); background: var(--bad-soft); }
+.raise-option.is-archive.is-active span { color: var(--bad); }
+.raise-archive-note {
+  display: flex;
+  gap: var(--a-2);
+  margin: 0;
+  padding: var(--a-3) var(--a-4);
+  border-radius: var(--r-2);
+  background: var(--solid-2);
+  border: 1px solid var(--line);
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+.raise-archive-note svg { width: 16px; height: 16px; flex: none; margin-top: 2px; color: var(--bad); }
