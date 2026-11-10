@@ -125,6 +125,7 @@ export function RaiseSheet({ suggestion, token, onClose, onDone }) {
   const percent = valid && suggestion.currentRent ? (diff / suggestion.currentRent) * 100 : 0;
   const overCap = valid && suggestion.maxLegalRent && amount > suggestion.maxLegalRent;
   const finished = suggestion.daysUntil <= 0;
+  const full = finished || suggestion.allPaid;
 
   async function apply(event) {
     event.preventDefault();
@@ -180,12 +181,14 @@ export function RaiseSheet({ suggestion, token, onClose, onDone }) {
   }
 
   return (
-    <SheetFrame eyebrow={finished ? "12 ay doldu · kira artışı" : "Kira artışı"} title={suggestion.name} onClose={onClose}>
+    <SheetFrame eyebrow={full ? "12 ay doldu · kira artışı" : "Kira artışı"} title={suggestion.name} onClose={onClose}>
       <form className="sheet-form raise-sheet" onSubmit={apply}>
         <p className="raise-lead">
           {finished
             ? "Kira yılı " + formatDate(suggestion.anniversary) + " tarihinde doldu (" + (suggestion.paidMonths || 0) + "/12 ay ödendi). Zam yılda bir yapılır: yeni kirayı girersen sonraki 12 ay bu tutarla işlenir."
-            : "Kira yılı " + formatDate(suggestion.anniversary) + " tarihinde doluyor (" + whenText(suggestion.anniversary) + ")."}
+            : suggestion.allPaid
+              ? "12 aylık tablo doldu (12/12 ay ödendi). Kira yılı " + formatDate(suggestion.anniversary) + " tarihinde yenileniyor. Zam yılda bir yapılır: yeni kirayı girersen sonraki 12 ay bu tutarla işlenir."
+              : "Kira yılı " + formatDate(suggestion.anniversary) + " tarihinde doluyor (" + whenText(suggestion.anniversary) + ")."}
         </p>
 
         <div className="raise-compare">

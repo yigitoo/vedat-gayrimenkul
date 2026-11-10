@@ -1568,12 +1568,13 @@ export default function Page() {
     };
   }, [view, paymentTab, gridStamp, token, signOut]);
 
-  /* Kira yılı (12 ay) dolunca zam sorusu kendiliğinden açılır. "Bekle"
-     denirse öneri beklemede kalır; bu oturumda aynı kiracı için tekrar
-     açılmaz, sonraki girişte yine sorulur. */
+  /* 12 aylık tablo dolunca (12/12 ödendi) ya da kira yılı bitince zam sorusu
+     hemen, hangi ekranda olursan ol açılır. "Bekle" denirse öneri beklemede
+     kalır; bu oturumda aynı durum için tekrar açılmaz, sonraki girişte ya da
+     12. ay ödenince yine sorulur. */
   const raiseAskedRef = useRef(null);
   useEffect(() => {
-    if (view !== "payments" || modal) return;
+    if (modal) return;
     const list = raises?.suggestions || [];
     if (!raiseAskedRef.current) {
       let stored = [];
@@ -1585,16 +1586,17 @@ export default function Page() {
       raiseAskedRef.current = new Set(Array.isArray(stored) ? stored : []);
     }
     const asked = raiseAskedRef.current;
-    const due = list.find((item) => item.daysUntil <= 0 && !asked.has(item.tenantId + ":" + item.anniversary));
+    const askKey = (item) => item.tenantId + ":" + item.anniversary + ":" + (item.allPaid ? "12" : "son");
+    const due = list.find((item) => (item.allPaid || item.daysUntil <= 0) && !asked.has(askKey(item)));
     if (!due) return;
-    asked.add(due.tenantId + ":" + due.anniversary);
+    asked.add(askKey(due));
     try {
       window.sessionStorage.setItem("kira-akis-raise-asked", JSON.stringify([...asked]));
     } catch {
       /* oturum deposu kapalıysa yalnız bellekte tutulur */
     }
     setModal({ type: "raise", suggestion: due, auto: true });
-  }, [view, modal, raises]);
+  }, [modal, raises]);
 
   // Aidat çizelgesi de yalnız kendi ekranında çekilir.
   useEffect(() => {
@@ -1788,6 +1790,7 @@ export default function Page() {
     setModal(null);
     setFlash({ tone: "ok", message });
     setGridStamp((value) => value + 1);
+    setRaiseStamp((value) => value + 1);
     await reload();
   }
 

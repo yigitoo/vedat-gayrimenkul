@@ -12,6 +12,8 @@ const { notifyRentIncreased, notifyRentIncreaseDue } = require('./notificationSe
 
 const DAY_MS = 86400000;
 const DUE_BEFORE_DAYS = 30;
+// 12 ay erken ödendiyse (12/12) öneri dönümden bu kadar önce de çıkar.
+const FULL_BEFORE_DAYS = 62;
 const DUE_AFTER_DAYS = 60;
 // Dönümden biraz önce girilen zam da o yılın zammı sayılır.
 const RAISED_GRACE_DAYS = 15;
@@ -56,14 +58,14 @@ function floorTo10(value) {
 }
 
 /* Bu kiracı için şu an "vadesi gelmiş" dönüm (yoksa null). */
-function dueAnniversary(tenant, today) {
+function dueAnniversary(tenant, today, before = DUE_BEFORE_DAYS) {
   const start = tenancyStart(tenant);
   if (!start) return null;
   const startKey = dayKey(start);
   for (let years = 1; years <= 60; years += 1) {
     const key = addYears(startKey, years);
     const diff = Math.round((key - today) / DAY_MS);
-    if (diff > DUE_BEFORE_DAYS) return null;
+    if (diff > before) return null;
     if (diff >= -DUE_AFTER_DAYS) return { key, years, daysUntil: diff, startKey };
   }
   return null;
@@ -163,7 +165,7 @@ async function getSuggestions({ reference = now(), tenantId = null } = {}) {
 
   const due = [];
   for (const tenant of tenants) {
-    const anniversary = dueAnniversary(tenant, today);
+    const anniversary = dueAnniversary(tenant, today, FULL_BEFORE_DAYS);
     if (!anniversary) continue;
     if (alreadyRaised(tenant, anniversary.key)) continue;
     if (isDismissed(tenant, anniversary.key)) continue;
@@ -179,6 +181,8 @@ async function getSuggestions({ reference = now(), tenantId = null } = {}) {
       pickRate(rates, anniversary.key),
       countPaid(tenant, anniversary.key)
     ))
+    // 30 günden uzak dönüm yalnız 12 aylık tablo dolduysa (12/12) sorulur.
+    .filter((item) => item.daysUntil <= DUE_BEFORE_DAYS || item.allPaid)
     .sort((a, b) => a.anniversary.localeCompare(b.anniversary) || a.name.localeCompare(b.name, 'tr'));
 }
 
