@@ -9,7 +9,7 @@ const { parsePeriod, serializePayment } = require('../utils/api');
 const { now } = require('../utils/format');
 const { requireMoney } = require('../utils/money');
 const { notifyPaymentDeleted, notifyPaymentRecorded } = require('../services/notificationService');
-const { clearPeriod, loadYearGrid, markPeriodPaid, setPeriodAmount } = require('../services/payments');
+const { clearPeriod, loadTodayList, loadYearGrid, markPeriodPaid, setPeriodAmount } = require('../services/payments');
 
 function parsePaymentInput(body = {}) {
   const amount = requireMoney(body.amount, 'payment');
@@ -50,6 +50,10 @@ module.exports = async (req, res) => {
       // Yıl çizelgesi: kiracı × 12 ay kutucukları tek istekte gelir.
       if (String(req.query.scope || '') === 'year') {
         return res.status(200).json(await loadYearGrid(parseYear(req.query.year)));
+      }
+      // Bugün tahsil edilecekler ve gecikenler.
+      if (String(req.query.scope || '') === 'today') {
+        return res.status(200).json(await loadTodayList());
       }
 
       const filter = {};

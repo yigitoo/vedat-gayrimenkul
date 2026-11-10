@@ -58,6 +58,7 @@ import MonthSheet from "./components/MonthSheet";
 import LedgerView from "./components/Ledger";
 import TodosView from "./components/Todos";
 import PaymentGrid from "./components/PaymentGrid";
+import TodayDue from "./components/TodayDue";
 import ReportsView from "./components/Reports";
 import SettingsView from "./components/Settings";
 import {
@@ -127,7 +128,7 @@ const MONTH_LONG = [
 const VIEWS = [
   { id: "overview", label: "Özet", icon: SquaresFour, lead: "Dönemin tahsilat resmi ve sıradaki ödemeler.", primary: true, group: "Genel" },
   { id: "calendar", label: "Takvim", icon: CalendarBlank, lead: "Hangi gün kimden ne bekleniyor.", primary: true, group: "Genel" },
-  { id: "payments", label: "Ödemeler", icon: Wallet, lead: "Yıl tablosu ve dönem defteri: kim ödedi, kim gecikti.", primary: true, group: "Kira" },
+  { id: "payments", label: "Ödemeler", icon: Wallet, lead: "Yıl tablosu, dönem defteri ve günlük tahsilat: kim ödedi, kim gecikti.", primary: true, group: "Kira" },
   { id: "tenants", label: "Kiracılar", icon: UsersThree, lead: "Sözleşmeler, kira tutarları ve zam önerileri.", primary: true, group: "Kira" },
   { id: "dues", label: "Aidat", icon: Buildings, lead: "Apartman ve site aidatı: hangi ay ödendi.", group: "Kira" },
   { id: "bus", label: "Otobüs", icon: Bus, lead: "Hat defteri: gün gün hasılat, mazot, yövmiye.", group: "İşletme" },
@@ -513,7 +514,13 @@ function MonthPulse({ metrics, period }) {
       meta: metrics.overdueCount ? metrics.overdueCount + " geciken" : metrics.upcomingCount + " yaklaşan",
       tone: metrics.overdueCount ? "bad" : "warn",
     },
-    { key: "expense", label: "Gider", value: metrics.totalExpense, meta: "aidat dahil" },
+    {
+      key: "unpaid",
+      label: "Ödenmemiş kira",
+      count: Math.max((metrics.tenantCount || 0) - (metrics.paidCount || 0), 0),
+      meta: (metrics.overdueCount || 0) + " geciken",
+      tone: metrics.overdueCount ? "bad" : undefined,
+    },
     { key: "net", label: "Net", value: metrics.netIncome, meta: "tahsilat − gider", tone: metrics.netIncome >= 0 ? "accent" : "bad" },
   ];
 
@@ -526,13 +533,16 @@ function MonthPulse({ metrics, period }) {
               <i aria-hidden="true" />
               {item.label}
             </span>
-            <strong className="num">{formatCurrency(item.value)}</strong>
+            <strong className="num">{item.count !== undefined ? item.count : formatCurrency(item.value)}</strong>
             <small>{item.meta}</small>
           </div>
         ))}
       </div>
-      <div className="pulse-bar" role="img" aria-label={"Tahsilat oranı yüzde " + rate}>
-        <i style={{ width: rate + "%" }} />
+      <div className="pulse-track">
+        <div className="pulse-bar" role="img" aria-label={"Tahsilat oranı yüzde " + rate}>
+          <i style={{ width: rate + "%" }} />
+        </div>
+        <span className={"pulse-rate num" + (rate >= 100 ? " tone-ok" : "")} aria-hidden="true">%{rate}</span>
       </div>
     </section>
   );
@@ -1312,13 +1322,16 @@ export default function Page() {
 
   const [view, setView] = useState("overview");
   const [filter, setFilter] = useState("all");
-  const [paymentTab, setPaymentTab] = useState("grid");
+  const [paymentTab, setPaymentTab] = useState("today");
   const [paymentQuery, setPaymentQuery] = useState("");
   const [gridYear, setGridYear] = useState(0);
   const [grid, setGrid] = useState(null);
   const [gridLoading, setGridLoading] = useState(false);
   const [gridPending, setGridPending] = useState("");
   const [gridStamp, setGridStamp] = useState(0);
+  const [todayList, setTodayList] = useState(null);
+  const [todayLoading, setTodayLoading] = useState(false);
+  const [todayPending, setTodayPending] = useState("");
   const [duesYear, setDuesYear] = useState(0);
   const [dues, setDues] = useState(null);
   const [duesLoading, setDuesLoading] = useState(false);
@@ -1542,6 +1555,58 @@ export default function Page() {
     };
   }, [view, paymentTab, gridYear, gridStamp, token, signOut]);
 
+  // Bugün tahsil edilecekler: yalnız o sekme açıkken; her ödeme işleminde tazelenir.
+  useEffect(() => {
+    if (view !== "payments" || paymentTab !== "today" || !token) return undefined;
+    let cancelled = false;
+    setTodayLoading(true);
+    apiRequest("/api/payments?scope=today", {}, token)
+      .then((payload) => {
+        if (!cancelled) setTodayList(payload);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        if (error.status === 401) signOut("Oturum süresi doldu, tekrar giriş yapın.");
+        else setFlash({ tone: "bad", message: error.message });
+      })
+      .finally(() => {
+        if (!cancelled) setTodayLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [view, paymentTab, gridStamp, token, signOut]);
+
+  /* 12 aylık tablo dolunca (12/12 ödendi) ya da kira yılı bitince zam sorusu
+     hemen, hangi ekranda olursan ol açılır. "Bekle" denirse öneri beklemede
+     kalır; bu oturumda aynı durum için tekrar açılmaz, sonraki girişte ya da
+     12. ay ödenince yine sorulur. */
+  const raiseAskedRef = useRef(null);
+  useEffect(() => {
+    if (modal) return;
+    const list = raises?.suggestions || [];
+    if (!raiseAskedRef.current) {
+      let stored = [];
+      try {
+        stored = JSON.parse(window.sessionStorage.getItem("kira-akis-raise-asked") || "[]");
+      } catch {
+        stored = [];
+      }
+      raiseAskedRef.current = new Set(Array.isArray(stored) ? stored : []);
+    }
+    const asked = raiseAskedRef.current;
+    const askKey = (item) => item.tenantId + ":" + item.anniversary + ":" + (item.allPaid ? "12" : "son");
+    const due = list.find((item) => (item.allPaid || item.daysUntil <= 0) && !asked.has(askKey(item)));
+    if (!due) return;
+    asked.add(askKey(due));
+    try {
+      window.sessionStorage.setItem("kira-akis-raise-asked", JSON.stringify([...asked]));
+    } catch {
+      /* oturum deposu kapalıysa yalnız bellekte tutulur */
+    }
+    setModal({ type: "raise", suggestion: due, auto: true });
+  }, [modal, raises]);
+
   // Aidat çizelgesi de yalnız kendi ekranında çekilir.
   useEffect(() => {
     if (view !== "dues" || !token || !duesYear) return undefined;
@@ -1734,6 +1799,7 @@ export default function Page() {
     setModal(null);
     setFlash({ tone: "ok", message });
     setGridStamp((value) => value + 1);
+    setRaiseStamp((value) => value + 1);
     await reload();
   }
 
@@ -1914,6 +1980,50 @@ export default function Page() {
       setFlash({ tone: "bad", message: error.message });
     } finally {
       setGridPending("");
+    }
+  }
+
+  /* Bugün listesinden "Ödendi": dönemin açığı kadar tek kayıt düşer,
+     yıl tablosundaki kutucuk işaretlemesiyle aynı istek. */
+  async function markTodayItem(item) {
+    const key = item.tenantId + ":" + item.year + ":" + item.month;
+    const label = MONTH_LONG[item.month - 1] + " " + item.year;
+    setTodayPending(key);
+    try {
+      const result = await apiRequest(
+        "/api/payments",
+        {
+          method: "POST",
+          body: JSON.stringify({ tenantId: item.tenantId, month: item.month, year: item.year, fill: true }),
+        },
+        token
+      );
+      const paymentId = result.payment?.id;
+      setFlash({
+        tone: "ok",
+        message: result.skipped ? label + " zaten ödenmiş görünüyor." : item.name + " · " + label + " ödendi.",
+        action: result.skipped || !paymentId
+          ? null
+          : {
+              label: "Geri al",
+              run: async () => {
+                try {
+                  await apiRequest("/api/payments?id=" + paymentId, { method: "DELETE" }, token);
+                  setGridStamp((value) => value + 1);
+                  await reload();
+                } catch (error) {
+                  setFlash({ tone: "bad", message: error.message });
+                }
+              },
+            },
+      });
+      setGridStamp((value) => value + 1);
+      setRaiseStamp((value) => value + 1);
+      await reload();
+    } catch (error) {
+      setFlash({ tone: "bad", message: error.message });
+    } finally {
+      setTodayPending("");
     }
   }
 
@@ -2400,6 +2510,19 @@ export default function Page() {
                   >
                     Dönem defteri
                   </button>
+                  <button
+                    type="button"
+                    className={"filter" + (paymentTab === "today" ? " is-active" : "")}
+                    onClick={() => setPaymentTab("today")}
+                    aria-pressed={paymentTab === "today"}
+                  >
+                    Günlük tahsilat
+                    {todayList && todayList.totals.todayCount + todayList.totals.overdueCount > 0 ? (
+                      <span className="filter-count num">
+                        {todayList.totals.todayCount + todayList.totals.overdueCount}
+                      </span>
+                    ) : null}
+                  </button>
                 </div>
                 <div className="search glass glass--chip">
                   <MagnifyingGlass weight="bold" />
@@ -2426,6 +2549,28 @@ export default function Page() {
                   onExportMonth={exportPaymentMonth}
                   onExportYear={exportPaymentYear}
                   exportBusy={paymentExportBusy}
+                  query={paymentQuery}
+                />
+              ) : paymentTab === "today" ? (
+                <TodayDue
+                  data={todayList}
+                  busy={todayLoading}
+                  pending={todayPending}
+                  raises={raises}
+                  onRaise={(suggestion) => setModal({ type: "raise", suggestion })}
+                  onMark={markTodayItem}
+                  onPay={(item) =>
+                    setModal(
+                      item
+                        ? {
+                            type: "payment",
+                            tenantId: item.tenantId,
+                            period: { month: item.month, year: item.year },
+                            amount: item.remaining,
+                          }
+                        : { type: "payment", tenantId: null }
+                    )
+                  }
                   query={paymentQuery}
                 />
               ) : (
@@ -2668,11 +2813,31 @@ export default function Page() {
           suggestion={modal.suggestion}
           token={token}
           onClose={() => setModal(null)}
-          onDone={async (result, message) => {
+          onDone={async (result, message, undo) => {
             setModal(null);
             if (result) setRaises((current) => ({ ...(current || {}), ...result }));
             setRaiseStamp((value) => value + 1);
-            setFlash({ tone: "ok", message });
+            // Yeni kira bakiyeleri değiştirir: yıl tablosu ve günlük liste tazelensin.
+            setGridStamp((value) => value + 1);
+            setFlash({
+              tone: "ok",
+              message,
+              action: undo
+                ? {
+                    label: undo.label,
+                    run: async () => {
+                      try {
+                        await undo.run();
+                        setRaiseStamp((value) => value + 1);
+                        setGridStamp((value) => value + 1);
+                        await reload();
+                      } catch (error) {
+                        setFlash({ tone: "bad", message: error.message });
+                      }
+                    },
+                  }
+                : null,
+            });
             await reload();
           }}
         />
@@ -2701,7 +2866,8 @@ export default function Page() {
         <PaymentSheet
           tenantId={modal.tenantId}
           tenants={tenants}
-          period={data.period}
+          period={modal.period || data.period}
+          amount={modal.amount}
           date={modal.date}
           token={token}
           onClose={() => setModal(null)}

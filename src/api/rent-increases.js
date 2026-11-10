@@ -52,7 +52,7 @@ module.exports = async (req, res) => {
     const action = String(body.action || req.query.action || '');
     if (action === 'apply') {
       const tenantId = requireTenantId(body.tenantId);
-      const result = await applySuggestion({ tenantId, amount: body.amount, effectiveFrom: body.effectiveFrom });
+      const result = await applySuggestion({ tenantId, amount: body.amount, effectiveFrom: body.effectiveFrom, rate: body.rate });
       return res.status(200).json({ ...result, ...(await overview()) });
     }
     if (action === 'dismiss') {

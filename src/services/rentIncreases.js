@@ -12,6 +12,8 @@ const { notifyRentIncreased, notifyRentIncreaseDue } = require('./notificationSe
 
 const DAY_MS = 86400000;
 const DUE_BEFORE_DAYS = 30;
+// 12 ay erken ödendiyse (12/12) öneri dönümden bu kadar önce de çıkar.
+const FULL_BEFORE_DAYS = 62;
 const DUE_AFTER_DAYS = 60;
 // Dönümden biraz önce girilen zam da o yılın zammı sayılır.
 const RAISED_GRACE_DAYS = 15;
@@ -56,14 +58,14 @@ function floorTo10(value) {
 }
 
 /* Bu kiracı için şu an "vadesi gelmiş" dönüm (yoksa null). */
-function dueAnniversary(tenant, today) {
+function dueAnniversary(tenant, today, before = DUE_BEFORE_DAYS) {
   const start = tenancyStart(tenant);
   if (!start) return null;
   const startKey = dayKey(start);
   for (let years = 1; years <= 60; years += 1) {
     const key = addYears(startKey, years);
     const diff = Math.round((key - today) / DAY_MS);
-    if (diff > DUE_BEFORE_DAYS) return null;
+    if (diff > before) return null;
     if (diff >= -DUE_AFTER_DAYS) return { key, years, daysUntil: diff, startKey };
   }
   return null;
@@ -163,7 +165,7 @@ async function getSuggestions({ reference = now(), tenantId = null } = {}) {
 
   const due = [];
   for (const tenant of tenants) {
-    const anniversary = dueAnniversary(tenant, today);
+    const anniversary = dueAnniversary(tenant, today, FULL_BEFORE_DAYS);
     if (!anniversary) continue;
     if (alreadyRaised(tenant, anniversary.key)) continue;
     if (isDismissed(tenant, anniversary.key)) continue;
@@ -179,6 +181,8 @@ async function getSuggestions({ reference = now(), tenantId = null } = {}) {
       pickRate(rates, anniversary.key),
       countPaid(tenant, anniversary.key)
     ))
+    // 30 günden uzak dönüm yalnız 12 aylık tablo dolduysa (12/12) sorulur.
+    .filter((item) => item.daysUntil <= DUE_BEFORE_DAYS || item.allPaid)
     .sort((a, b) => a.anniversary.localeCompare(b.anniversary) || a.name.localeCompare(b.name, 'tr'));
 }
 
@@ -189,25 +193,38 @@ function requestError(message, status = 400) {
 }
 
 /* Öneriyi onayla: tenants.js'teki computeRaise ile aynı zam kaydı düşer. */
-async function applySuggestion({ tenantId, amount, effectiveFrom }, { reference = now() } = {}) {
+async function applySuggestion({ tenantId, amount, effectiveFrom, rate }, { reference = now() } = {}) {
   // tenants.js tembel yüklenir; API yönlendiricisi de böyle çalışıyor.
   const { computeRaise } = require('../api/tenants');
   const [suggestion] = await getSuggestions({ reference, tenantId });
   if (!suggestion) throw requestError('Bu kiracı için bekleyen bir artış önerisi yok.', 404);
-  if (suggestion.rate === null) throw requestError('Kayıtlı TÜFE oranı yok; önce oranı girin.');
+
+  /* Oranı kullanıcı yazar (yıllık zam oranı); yazmazsa kayıtlı TÜFE oranı
+     yalnız not için kullanılır. Tutar her durumda kullanıcıdan gelir; TÜFE
+     önerisine düşmek yalnız eski istemciler için. */
+  const userRate = rate === undefined || rate === null || String(rate).trim() === ''
+    ? null
+    : Number(String(rate).replace(',', '.'));
+  if (userRate !== null && (!Number.isFinite(userRate) || userRate < 0 || userRate > 200)) {
+    throw requestError('Zam oranı 0 ile 200 arasında olmalı.');
+  }
 
   const value = amount === undefined || amount === null || amount === '' ? suggestion.suggestedRent : amount;
   const numeric = Number(String(value).replace(/\./g, '').replace(',', '.'));
   if (!Number.isFinite(numeric) || numeric <= 0) throw requestError('Yeni kira tutarı sıfırdan büyük olmalı.');
 
   const tenant = await Tenant.findById(tenantId);
-  const rateText = String(suggestion.rate).replace('.', ',');
+  const note = userRate !== null
+    ? 'Yıllık artış %' + String(userRate).replace('.', ',')
+    : suggestion.rate !== null
+      ? 'TÜFE %' + String(suggestion.rate).replace('.', ',') + ' (' + suggestion.rateLabel + ') ile yıllık artış'
+      : 'Yıllık artış';
   let raise;
   try {
     raise = computeRaise(tenant, {
       amount: value,
       effectiveFrom: effectiveFrom || suggestion.anniversary,
-      note: 'TÜFE %' + rateText + ' (' + suggestion.rateLabel + ') ile yıllık artış',
+      note,
     });
   } catch (error) {
     throw requestError(error.message);
@@ -218,7 +235,7 @@ async function applySuggestion({ tenantId, amount, effectiveFrom }, { reference 
   await tenant.save();
   const notification = await notifyRentIncreased(tenant, raise);
 
-  const warning = raise.amount > suggestion.maxLegalRent
+  const warning = suggestion.maxLegalRent && raise.amount > suggestion.maxLegalRent
     ? 'Yeni kira TÜFE tavanını (' + new Intl.NumberFormat('tr-TR').format(suggestion.maxLegalRent) + ' TL) aşıyor.'
     : null;
   return { applied: { tenantId, amount: raise.amount, previousAmount: raise.previousAmount, effectiveFrom: raise.effectiveFrom.toISOString() }, warning, notification };
