@@ -94,7 +94,7 @@ export function RaiseSuggestions({ raises, onOpen, compact = false }) {
 }
 
 /* ---------- Zam penceresi ----------
-   Kira yılı (12 ay) dolunca açılır. Önce o ayki zam oranı sorulur; oran
+   Kira yılı (12 ay) dolunca, yılda bir kez açılır. Önce yıllık zam oranı sorulur; oran
    yazılınca yeni kira anında hesaplanır, ama kaydedilecek tutarı sen
    girersin ("Hesaplananı yaz" yalnız kolaylık). "Bekle" pencereyi kapatır,
    öneri beklemede kalır; tutar yazılıp kaydedilince yeni kira geçerlilik
@@ -184,7 +184,7 @@ export function RaiseSheet({ suggestion, token, onClose, onDone }) {
       <form className="sheet-form raise-sheet" onSubmit={apply}>
         <p className="raise-lead">
           {finished
-            ? "Kira yılı " + formatDate(suggestion.anniversary) + " tarihinde doldu (" + (suggestion.paidMonths || 0) + "/12 ay ödendi). Yeni kirayı girersen 12 aylık tablo yeni tutarla başlar."
+            ? "Kira yılı " + formatDate(suggestion.anniversary) + " tarihinde doldu (" + (suggestion.paidMonths || 0) + "/12 ay ödendi). Zam yılda bir yapılır: yeni kirayı girersen sonraki 12 ay bu tutarla işlenir."
             : "Kira yılı " + formatDate(suggestion.anniversary) + " tarihinde doluyor (" + whenText(suggestion.anniversary) + ")."}
         </p>
 
@@ -206,7 +206,7 @@ export function RaiseSheet({ suggestion, token, onClose, onDone }) {
         </div>
 
         <div className="field">
-          <label htmlFor="raise-rate">Bu ayki zam oranı (%)</label>
+          <label htmlFor="raise-rate">Yıllık zam oranı (%)</label>
           <input
             id="raise-rate"
             type="text"
@@ -237,7 +237,7 @@ export function RaiseSheet({ suggestion, token, onClose, onDone }) {
               </>
             ) : (
               <span>
-                Oranı yaz, yeni kira anında hesaplansın.
+                Yıllık oranı yaz, yeni kira anında hesaplansın.
                 {suggestion.rate !== null && suggestion.rate !== undefined ? " Son TÜFE: " + rateLabel(suggestion) + "." : ""}
               </span>
             )}

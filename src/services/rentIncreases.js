@@ -195,7 +195,7 @@ async function applySuggestion({ tenantId, amount, effectiveFrom, rate }, { refe
   const [suggestion] = await getSuggestions({ reference, tenantId });
   if (!suggestion) throw requestError('Bu kiracı için bekleyen bir artış önerisi yok.', 404);
 
-  /* Oranı kullanıcı yazar (o ayki zam oranı); yazmazsa kayıtlı TÜFE oranı
+  /* Oranı kullanıcı yazar (yıllık zam oranı); yazmazsa kayıtlı TÜFE oranı
      yalnız not için kullanılır. Tutar her durumda kullanıcıdan gelir; TÜFE
      önerisine düşmek yalnız eski istemciler için. */
   const userRate = rate === undefined || rate === null || String(rate).trim() === ''
