@@ -1,0 +1,143 @@
+/* Kağıt kodu → şirketin web adresi. Logo bu adresten (sitenin kendi
+   simgesi) çekilir; anahtar ya da ücretli servis gerekmez. Listede olmayan
+   kağıt için kullanıcı web adresini ya da logo bağlantısını kendisi girer. */
+export const TICKER_DOMAINS = {
+  // BIST
+  AEFES: "anadoluefes.com",
+  AGHOL: "anadolugrubu.com.tr",
+  AKBNK: "akbank.com",
+  AKSA: "aksa.com",
+  AKSEN: "aksenerji.com.tr",
+  ALARK: "alarko.com.tr",
+  ARCLK: "arcelikglobal.com",
+  ASELS: "aselsan.com",
+  ASTOR: "astorenerji.com.tr",
+  BIMAS: "bim.com.tr",
+  BRSAN: "borusan.com",
+  CCOLA: "cci.com.tr",
+  CIMSA: "cimsa.com.tr",
+  DOAS: "dogusotomotiv.com.tr",
+  DOHOL: "doganholding.com.tr",
+  EKGYO: "emlakkonut.com.tr",
+  ENJSA: "enerjisa.com.tr",
+  ENKAI: "enka.com",
+  EREGL: "erdemir.com.tr",
+  FROTO: "fordotosan.com.tr",
+  GARAN: "garantibbva.com.tr",
+  GUBRF: "gubretas.com.tr",
+  HALKB: "halkbank.com.tr",
+  HEKTS: "hektas.com.tr",
+  ISCTR: "isbank.com.tr",
+  ISMEN: "isyatirim.com.tr",
+  KCHOL: "koc.com.tr",
+  KONTR: "kontrolmatik.com",
+  KOZAL: "kozaaltin.com.tr",
+  KRDMD: "kardemir.com",
+  LOGO: "logo.com.tr",
+  MAVI: "mavi.com",
+  MGROS: "migros.com.tr",
+  ODAS: "odasenerji.com",
+  OTKAR: "otokar.com.tr",
+  OYAKC: "oyakcimento.com",
+  PETKM: "petkim.com.tr",
+  PGSUS: "flypgs.com",
+  SAHOL: "sabanci.com",
+  SASA: "sasa.com.tr",
+  SISE: "sisecam.com.tr",
+  SOKM: "sokmarket.com.tr",
+  TAVHL: "tavhavalimanlari.com.tr",
+  TCELL: "turkcell.com.tr",
+  THYAO: "turkishairlines.com",
+  TKFEN: "tekfen.com.tr",
+  TOASO: "tofas.com.tr",
+  TSKB: "tskb.com.tr",
+  TTKOM: "turktelekom.com.tr",
+  TTRAK: "turktraktor.com.tr",
+  TUPRS: "tupras.com.tr",
+  ULKER: "ulker.com.tr",
+  VAKBN: "vakifbank.com.tr",
+  VESTL: "vestel.com.tr",
+  YKBNK: "yapikredi.com.tr",
+  AGESA: "agesa.com.tr",
+  AKCNS: "akcansa.com.tr",
+  AKGRT: "aksigorta.com.tr",
+  ALBRK: "albaraka.com.tr",
+  ALTNY: "altinay.com",
+  ANSGR: "anadolusigorta.com.tr",
+  AYGAZ: "aygaz.com.tr",
+  BAGFS: "bagfas.com.tr",
+  BERA: "beraholding.com.tr",
+  BUCIM: "bursacimento.com.tr",
+  CEMTS: "cemtas.com.tr",
+  CLEBI: "celebiaviation.com",
+  CWENE: "cwenerji.com",
+  DEVA: "deva.com.tr",
+  ECILC: "eczacibasi.com.tr",
+  EGEEN: "egeendustri.com.tr",
+  EUPWR: "europowerenerji.com.tr",
+  GLYHO: "globalyatirim.com.tr",
+  GOODY: "goodyear.com.tr",
+  GWIND: "galatawind.com.tr",
+  ICBCT: "icbc.com.tr",
+  IZMDC: "izdemir.com.tr",
+  KARSN: "karsan.com.tr",
+  KARTN: "kartonsan.com.tr",
+  KCAER: "kocaer.com",
+  KERVT: "kerevitas.com.tr",
+  KORDS: "kordsa.com",
+  KTLEV: "katilimevim.com.tr",
+  MIATK: "miateknoloji.com",
+  MPARK: "mlpcare.com",
+  NETAS: "netas.com.tr",
+  NUHCM: "nuhcimento.com.tr",
+  PNSUT: "pinar.com.tr",
+  QNBFB: "qnb.com.tr",
+  REEDR: "reeder.com.tr",
+  SDTTR: "sdt.com.tr",
+  SELEC: "selcukecza.com.tr",
+  SKBNK: "sekerbank.com.tr",
+  SMRTG: "smartgunes.com",
+  TABGD: "tabgida.com.tr",
+  TRGYO: "torunlargyo.com.tr",
+  TUKAS: "tukas.com.tr",
+  TURSG: "turkiyesigorta.com.tr",
+  VESBE: "vestel.com.tr",
+  YATAS: "yatas.com.tr",
+  YEOTK: "yeoteknoloji.com.tr",
+  ZOREN: "zorluenerji.com.tr",
+  // ABD
+  AMD: "amd.com",
+  BABA: "alibaba.com",
+  DIS: "disney.com",
+  INTC: "intel.com",
+  KO: "coca-cola.com",
+  PEP: "pepsico.com",
+  AAPL: "apple.com",
+  AMZN: "amazon.com",
+  GOOGL: "google.com",
+  META: "meta.com",
+  MSFT: "microsoft.com",
+  NFLX: "netflix.com",
+  NVDA: "nvidia.com",
+  TSLA: "tesla.com",
+};
+
+export function stockDomain(stock) {
+  return (stock.website || TICKER_DOMAINS[String(stock.symbol || "").toLocaleUpperCase("tr-TR")] || "").trim();
+}
+
+/* Sırayla denenecek logo adresleri: elle girilen bağlantı, sonra şirket
+   sitesinin kendi simgesi, sonra iki ayrı simge servisi (Google, DuckDuckGo). Hepsi düşerse kodun harfleri görünür. */
+export function logoSources(stock) {
+  const list = [];
+  if (stock.logoUrl) list.push(stock.logoUrl);
+  const domain = stockDomain(stock);
+  if (domain) {
+    // Şirket sitesinin yüksek çözünürlüklü uygulama simgesi (çoğunda 180 px logo).
+    list.push("https://" + domain + "/apple-touch-icon.png");
+    list.push("https://www." + domain + "/apple-touch-icon.png");
+    list.push("https://www.google.com/s2/favicons?domain=" + encodeURIComponent(domain) + "&sz=128");
+    list.push("https://icons.duckduckgo.com/ip3/" + encodeURIComponent(domain) + ".ico");
+  }
+  return list;
+}
