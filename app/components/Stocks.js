@@ -5,6 +5,7 @@ import { ChartBar, Minus, PencilSimple, Plus, Trash, WarningCircle } from "@phos
 import { SheetFrame } from "./Sheets";
 import { askConfirm } from "./Feedback";
 import { apiRequest, formatCurrency, formatDate, isPrivate, toDateInput } from "../lib/client";
+import { TICKER_DOMAINS, logoSources } from "../lib/stockLogos";
 
 /* Hisse fiyatı kuruşlu yazılır (45,32 TL); kira tutarlarından farklı olarak
    iki ondalık gösterilir. Gizlilik modunda tutar maskelenir. */
@@ -26,17 +27,31 @@ function parseNumber(text) {
   return Number.isFinite(value) ? value : NaN;
 }
 
-function StockLogo({ stock, size = "lg" }) {
-  const [broken, setBroken] = useState(false);
-  useEffect(() => setBroken(false), [stock.logoUrl]);
-  const letters = stock.symbol.slice(0, 2);
+function StockLogo({ stock, size = "md" }) {
+  const sources = logoSources(stock);
+  const key = sources.join("|");
+  const [index, setIndex] = useState(0);
+  useEffect(() => setIndex(0), [key]);
+  const src = sources[index];
   return (
     <span className={"stock-logo is-" + size} aria-hidden="true">
-      {stock.logoUrl && !broken ? (
+      {src ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={stock.logoUrl} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(true)} />
+        <img
+          src={src}
+          alt=""
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={() => setIndex((value) => value + 1)}
+          onLoad={(event) => {
+            // Simge servisleri bilinmeyen sitede 16 px'lik boş küre döndürür; onu say düşmüş.
+            if (index > 0 && event.currentTarget.naturalWidth > 0 && event.currentTarget.naturalWidth < 24) {
+              setIndex((value) => value + 1);
+            }
+          }}
+        />
       ) : (
-        <span className="stock-logo-letters">{letters}</span>
+        <span className="stock-logo-letters">{stock.symbol.slice(0, 2)}</span>
       )}
     </span>
   );
@@ -49,10 +64,16 @@ function StockFormSheet({ stock, token, onClose, onSaved }) {
     symbol: stock?.symbol || "",
     name: stock?.name || "",
     logoUrl: stock?.logoUrl || "",
+    website: stock?.website || "",
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const preview = { symbol: (form.symbol || "?").toLocaleUpperCase("tr-TR"), logoUrl: form.logoUrl.trim() };
+  const preview = {
+    symbol: (form.symbol || "?").toLocaleUpperCase("tr-TR"),
+    logoUrl: form.logoUrl.trim(),
+    website: form.website.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0],
+  };
+  const knownDomain = TICKER_DOMAINS[preview.symbol];
 
   async function submit(event) {
     event.preventDefault();
@@ -62,7 +83,7 @@ function StockFormSheet({ stock, token, onClose, onSaved }) {
       const result = editing
         ? await apiRequest("/api/stocks?id=" + stock.id, {
             method: "PATCH",
-            body: JSON.stringify({ name: form.name, logoUrl: form.logoUrl }),
+            body: JSON.stringify({ name: form.name, logoUrl: form.logoUrl, website: form.website }),
           }, token)
         : await apiRequest("/api/stocks", { method: "POST", body: JSON.stringify(form) }, token);
       onSaved(result.stock, editing ? result.stock.symbol + " güncellendi." : result.stock.symbol + " eklendi.");
@@ -76,7 +97,16 @@ function StockFormSheet({ stock, token, onClose, onSaved }) {
     <SheetFrame eyebrow="Borsa" title={editing ? stock.symbol + " · düzenle" : "Kağıt ekle"} size="compact" onClose={onClose}>
       <form className="sheet-form" onSubmit={submit}>
         <div className="stock-form-preview">
-          <StockLogo stock={preview} />
+          <StockLogo stock={preview} size="lg" />
+          <small className="field-hint">
+            {preview.logoUrl
+              ? "Yapıştırdığın logo kullanılıyor."
+              : preview.website
+                ? preview.website + " adresinden logo çekiliyor."
+                : knownDomain
+                  ? "Logo otomatik bulundu (" + knownDomain + ")."
+                  : "Logo için şirketin web adresini yaz."}
+          </small>
         </div>
         {editing ? null : (
           <div className="field">
@@ -105,7 +135,18 @@ function StockFormSheet({ stock, token, onClose, onSaved }) {
           />
         </div>
         <div className="field">
-          <label htmlFor="stock-logo">Logo adresi (isteğe bağlı)</label>
+          <label htmlFor="stock-website">Şirketin web adresi {knownDomain ? "(isteğe bağlı)" : ""}</label>
+          <input
+            id="stock-website"
+            inputMode="url"
+            autoCapitalize="none"
+            value={form.website}
+            onChange={(event) => setForm({ ...form, website: event.target.value })}
+            placeholder={knownDomain || "ör. sirket.com.tr"}
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="stock-logo">Logo görseli bağlantısı (isteğe bağlı)</label>
           <input
             id="stock-logo"
             type="url"
@@ -114,7 +155,7 @@ function StockFormSheet({ stock, token, onClose, onSaved }) {
             onChange={(event) => setForm({ ...form, logoUrl: event.target.value })}
             placeholder="https://…/logo.png"
           />
-          <p className="field-hint">Şirketin logosunun görsel bağlantısını yapıştır. Boş kalırsa kodun ilk harfleri görünür.</p>
+          <p className="field-hint">Otomatik logo beğenmezsen görselin bağlantısını yapıştır; bu öncelikli kullanılır.</p>
         </div>
         {error ? (
           <p className="form-error" role="alert"><WarningCircle weight="fill" />{error}</p>
@@ -449,7 +490,7 @@ export default function StocksView({ token, onFlash }) {
               </div>
 
               <div className="stock-foot">
-                <span>Ortalama fiyat</span>
+                <span>Ortalama</span>
                 <strong className="num">{stock.lots > 0 ? formatPrice(stock.averagePrice) : "—"}</strong>
                 <small className="num">{stock.lots > 0 ? "Maliyet " + formatCurrency(stock.totalCost) : "Elde lot yok"}</small>
               </div>

@@ -107,6 +107,7 @@ export function RaiseSheet({ suggestion, token, onClose, onDone }) {
   const hasCpi = suggestion.rate !== null && suggestion.rate !== undefined && suggestion.suggestedRent > 0;
   const [choice, setChoice] = useState(hasCpi ? "cpi" : "manual");
   const [amountInput, setAmountInput] = useState("");
+  const [rateInput, setRateInput] = useState("");
   const [effectiveFrom, setEffectiveFrom] = useState(String(suggestion.anniversary || "").slice(0, 10));
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -261,6 +262,36 @@ export function RaiseSheet({ suggestion, token, onClose, onDone }) {
             </div>
 
             {choice === "manual" ? (
+              <div className="field">
+                <label htmlFor="raise-rate">Zam oranı (%) · isteğe bağlı</label>
+                <input
+                  id="raise-rate"
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  value={rateInput}
+                  onChange={(event) => setRateInput(event.target.value)}
+                  placeholder={hasCpi ? "TÜFE " + rateText(suggestion.rate).slice(1) : "Örnek: 25"}
+                  autoFocus
+                />
+                {(() => {
+                  const rate = Number(String(rateInput).replace("%", "").replace(",", ".").trim());
+                  if (!rateInput.trim()) return <p className="field-hint">Oranı yazarsan yeni kira hesaplanır; tutarı yine sen yazarsın.</p>;
+                  if (!Number.isFinite(rate) || rate < 0 || rate > 200) return <p className="field-hint tone-bad">Oran okunamadı. Örnek: 25 ya da 31,5</p>;
+                  const calculated = Math.round(suggestion.currentRent * (1 + rate / 100));
+                  return (
+                    <p className="raise-calc">
+                      <span>{rateText(rate)} ile hesaplanan: <strong className="num">{formatCurrency(calculated)}</strong></span>
+                      <button className="btn btn-quiet btn-sm" type="button" onClick={() => setAmountInput(String(calculated))}>
+                        Hesaplananı yaz
+                      </button>
+                    </p>
+                  );
+                })()}
+              </div>
+            ) : null}
+
+            {choice === "manual" ? (
               <MoneyField
                 id="raise-amount"
                 label="Yeni aylık kira"
@@ -268,7 +299,6 @@ export function RaiseSheet({ suggestion, token, onClose, onDone }) {
                 value={amountInput}
                 onChange={setAmountInput}
                 kind="rent"
-                autoFocus
                 required
               />
             ) : null}

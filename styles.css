@@ -4471,3 +4471,43 @@ body, .rail, .topbar, .tile, .panel, .row, .btn, .rail-link, .tab {
 /* Ana alan ızgarası kısa içerikte boş yeri satırlara paylaştırıp üst şeridi
    şişiriyordu (ör. az kağıtlı Borsa, boş ekranlar). Satırlar yukarıdan dizilir. */
 .main { align-content: start; }
+
+/* Borsa: küçük, sade kutular (55'in üzerine yazar) */
+.stock-grid { grid-template-columns: repeat(auto-fill, minmax(156px, 1fr)); gap: var(--a-3); }
+.stock-card { gap: var(--a-3); padding: var(--a-4) var(--a-3) var(--a-3); border-radius: var(--r-3); }
+.stock-head { gap: 2px; }
+.stock-logo { border-radius: var(--r-2); box-shadow: none; margin-bottom: var(--a-1); }
+.stock-logo.is-md { width: 44px; height: 44px; }
+.stock-logo.is-lg { width: 64px; height: 64px; }
+.stock-logo img { padding: 6px; }
+.stock-logo.is-md .stock-logo-letters { font-size: var(--fs-md); }
+.stock-symbol { font-size: var(--fs-md); letter-spacing: 0.03em; }
+.stock-name { font-size: var(--fs-xs); }
+.stock-lots {
+  grid-template-columns: 32px 1fr 32px;
+  gap: var(--a-1);
+  padding: 0;
+  background: none;
+  border: 0;
+}
+.stock-step { width: 32px; height: 32px; border-radius: var(--r-1); }
+.stock-step svg { width: 14px; height: 14px; }
+.stock-lot-count strong { font-size: var(--fs-xl); }
+.stock-lot-count small { font-size: 11px; }
+.stock-foot { gap: 0; padding-top: var(--a-2); border-top: 1px solid var(--line); }
+.stock-foot span { font-size: 10.5px; }
+.stock-foot strong { font-size: var(--fs-base); }
+.stock-foot small { font-size: 11px; }
+.stock-form-preview { gap: var(--a-2); text-align: center; }
+/* Dokunmatikte basma hedefi 44 px kalır */
+@media (pointer: coarse) {
+  .stock-lots { grid-template-columns: 44px 1fr 44px; }
+  .stock-step { width: 44px; height: 44px; border-radius: var(--r-2); }
+}
+@media (max-width: 720px) {
+  .stock-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--a-2); }
+  .stock-card { padding: var(--a-3) var(--a-2) var(--a-2); gap: var(--a-2); border-radius: 16px; }
+  .stock-logo.is-md { width: 40px; height: 40px; }
+  .stock-lot-count strong { font-size: var(--fs-lg); }
+  .stock-foot strong { font-size: var(--fs-md); }
+}

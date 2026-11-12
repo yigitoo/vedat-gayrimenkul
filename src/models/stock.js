@@ -15,6 +15,8 @@ const stockSchema = new Schema({
   symbol: { type: String, required: true, trim: true, uppercase: true, maxlength: 12, unique: true },
   name: { type: String, default: '', trim: true, maxlength: 80 },
   logoUrl: { type: String, default: '', trim: true, maxlength: 500 },
+  // Logo için şirketin web adresi (ör. thy.com); logoUrl boşsa buradan çekilir.
+  website: { type: String, default: '', trim: true, lowercase: true, maxlength: 120 },
   trades: { type: [tradeSchema], default: [] },
 }, { timestamps: true });
 

@@ -26,6 +26,7 @@ function serializeStock(stock) {
     symbol: stock.symbol,
     name: stock.name || '',
     logoUrl: stock.logoUrl || '',
+    website: stock.website || '',
     trades,
     ...summarize(stock.trades || []),
   };
@@ -46,6 +47,15 @@ function parseNumber(value, label, { min = 0, allowZero = false } = {}) {
     throw badRequest(label + ' geçerli bir sayı olmalı.');
   }
   return number;
+}
+
+// "https://www.thy.com/tr" → "thy.com"
+function parseWebsite(value) {
+  const text = String(value || '').trim().toLowerCase()
+    .replace(/^https?:\/\//, '').replace(/^www\./, '').split(/[/?#]/)[0];
+  if (!text) return '';
+  if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(text) || text.length > 120) throw badRequest('Web adresi geçersiz (ör. thy.com).');
+  return text;
 }
 
 function parseLogo(value) {
@@ -81,6 +91,7 @@ module.exports = async (req, res) => {
         symbol,
         name: String(body.name || '').trim().slice(0, 80),
         logoUrl: parseLogo(body.logoUrl),
+        website: parseWebsite(body.website),
       });
       return res.status(201).json({ stock: serializeStock(stock) });
     }
@@ -109,6 +120,7 @@ module.exports = async (req, res) => {
     if (req.method === 'PATCH') {
       if (body.name !== undefined) stock.name = String(body.name || '').trim().slice(0, 80);
       if (body.logoUrl !== undefined) stock.logoUrl = parseLogo(body.logoUrl);
+      if (body.website !== undefined) stock.website = parseWebsite(body.website);
       await stock.save();
       return res.status(200).json({ stock: serializeStock(stock) });
     }
