@@ -126,13 +126,16 @@ export function stockDomain(stock) {
   return (stock.website || TICKER_DOMAINS[String(stock.symbol || "").toLocaleUpperCase("tr-TR")] || "").trim();
 }
 
-/* Sırayla denenecek logo adresleri: elle girilen bağlantı, sonra web
-   adresinden iki ayrı simge servisi. Hepsi düşerse kodun harfleri görünür. */
+/* Sırayla denenecek logo adresleri: elle girilen bağlantı, sonra şirket
+   sitesinin kendi simgesi, sonra iki ayrı simge servisi (Google, DuckDuckGo). Hepsi düşerse kodun harfleri görünür. */
 export function logoSources(stock) {
   const list = [];
   if (stock.logoUrl) list.push(stock.logoUrl);
   const domain = stockDomain(stock);
   if (domain) {
+    // Şirket sitesinin yüksek çözünürlüklü uygulama simgesi (çoğunda 180 px logo).
+    list.push("https://" + domain + "/apple-touch-icon.png");
+    list.push("https://www." + domain + "/apple-touch-icon.png");
     list.push("https://www.google.com/s2/favicons?domain=" + encodeURIComponent(domain) + "&sz=128");
     list.push("https://icons.duckduckgo.com/ip3/" + encodeURIComponent(domain) + ".ico");
   }

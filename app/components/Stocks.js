@@ -70,7 +70,7 @@ function StockLogo({ stock, size = "md" }) {
           onError={() => setIndex((value) => value + 1)}
           onLoad={(event) => {
             // Simge servisleri bilinmeyen sitede 16 px'lik boş küre döndürür; onu say düşmüş.
-            if (index > 0 && event.currentTarget.naturalWidth > 0 && event.currentTarget.naturalWidth < 24) {
+            if (src !== stock.logoUrl && event.currentTarget.naturalWidth > 0 && event.currentTarget.naturalWidth < 24) {
               setIndex((value) => value + 1);
             }
           }}

@@ -46,7 +46,8 @@ module.exports = { summarize };
    Çekilemeyen kağıt eski fiyatında kalır, hata satırı not düşülür; fiyat
    elle de girilebilir. */
 const US_TICKERS = new Set(['AAPL', 'AMZN', 'GOOGL', 'GOOG', 'META', 'MSFT', 'NFLX', 'NVDA', 'TSLA', 'AMD', 'INTC', 'KO', 'PEP', 'DIS', 'BABA', 'SPY', 'QQQ']);
-const FETCH_TIMEOUT_MS = 10000;
+// Vercel işlev süresini aşmasın diye kısa tutulur; istekler paralel gider.
+const FETCH_TIMEOUT_MS = 7000;
 
 function quoteSymbolFor(stock) {
   if (stock.quoteSymbol) return stock.quoteSymbol;

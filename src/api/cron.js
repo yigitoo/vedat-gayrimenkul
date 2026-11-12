@@ -16,6 +16,16 @@ module.exports = async (req, res) => {
     }
     if (mongoose.connection.readyState !== 1) await connectDB();
 
+    /* Hafta içi borsa kapanışından sonra (BIST 18:00) yalnız kağıt fiyatları.
+       vercel.json: '5 15 * * 1-5' UTC = 18:05 TR; Hobby planında saat içinde
+       herhangi bir dakikada tetiklenebilir, kapanıştan sonraya denk gelir. */
+    if (String(req.query?.task || '') === 'stocks') {
+      const day = new Date().getUTCDay();
+      if (day === 0 || day === 6) return res.status(200).json({ stocks: { skipped: 'hafta sonu' } });
+      const stocks = await require('../services/stocks').refreshStockPrices();
+      return res.status(200).json({ stocks });
+    }
+
     // Önce düzenli kalemler gidere dönüşsün, özetler güncel rakamı görsün.
     const recurring = await materializeDue();
     // Kiracı bazlı uyarılar önce: "yarın ödemesi var" ve gecikme mesajları
