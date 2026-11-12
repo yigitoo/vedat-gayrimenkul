@@ -1584,9 +1584,18 @@ export default function Page() {
 
   /* 12 aylık tablo dolunca (12/12 ödendi) ya da kira yılı bitince zam sorusu
      hemen, hangi ekranda olursan ol açılır. "Bekle" denirse öneri beklemede
-     kalır; bu oturumda aynı durum için tekrar açılmaz, sonraki girişte ya da
-     12. ay ödenince yine sorulur. */
+     kalır; bu oturumda kendiliğinden tekrar açılmaz, sonraki girişte yine
+     sorulur. Ama bir kutuya dokunup 12. ayı (yeniden) doldurduğunda her
+     seferinde açılır: geri alıp tekrar işaretlesen de. */
   const raiseAskedRef = useRef(null);
+  // Ödeme işlemi yapılan kiracılar ("*" = bilinmiyor, hepsi); öneriler
+  // tazelenince 12/12 olan varsa pencere "sorulmuş" sayılsa da açılır.
+  const raiseWatchRef = useRef(new Set());
+  const raiseSeenRef = useRef(null);
+  const watchRaise = useCallback((tenantId) => {
+    raiseWatchRef.current.add(tenantId || "*");
+    setRaiseStamp((value) => value + 1);
+  }, []);
   useEffect(() => {
     if (modal) return;
     const list = raises?.suggestions || [];
@@ -1601,15 +1610,33 @@ export default function Page() {
     }
     const asked = raiseAskedRef.current;
     const askKey = (item) => item.tenantId + ":" + item.anniversary + ":" + (item.allPaid ? "12" : "son");
-    const due = list.find((item) => (item.allPaid || item.daysUntil <= 0) && !asked.has(askKey(item)));
-    if (!due) return;
-    asked.add(askKey(due));
-    try {
-      window.sessionStorage.setItem("kira-akis-raise-asked", JSON.stringify([...asked]));
-    } catch {
-      /* oturum deposu kapalıysa yalnız bellekte tutulur */
+    const ask = (item) => {
+      asked.add(askKey(item));
+      try {
+        window.sessionStorage.setItem("kira-akis-raise-asked", JSON.stringify([...asked]));
+      } catch {
+        /* oturum deposu kapalıysa yalnız bellekte tutulur */
+      }
+      setModal({ type: "raise", suggestion: item, auto: true });
+    };
+
+    // Kutuya dokunup 12. ayı doldurduysan: daha önce sorulmuş olsa da aç.
+    if (raises && raiseSeenRef.current !== raises) {
+      raiseSeenRef.current = raises;
+      const watch = raiseWatchRef.current;
+      if (watch.size) {
+        raiseWatchRef.current = new Set();
+        const full = list.find((item) => item.allPaid && (watch.has(item.tenantId) || watch.has("*")));
+        if (full) {
+          ask(full);
+          return;
+        }
+      }
     }
-    setModal({ type: "raise", suggestion: due, auto: true });
+
+    // Kendiliğinden: oturumda sorulmamış, 12/12 ya da süresi gelmiş öneri.
+    const due = list.find((item) => (item.allPaid || item.daysUntil <= 0) && !asked.has(askKey(item)));
+    if (due) ask(due);
   }, [modal, raises]);
 
   // Aidat çizelgesi de yalnız kendi ekranında çekilir.
@@ -1971,6 +1998,7 @@ export default function Page() {
                 try {
                   await apiRequest("/api/payments?id=" + paymentId, { method: "DELETE" }, token);
                   setGridStamp((value) => value + 1);
+                  setRaiseStamp((value) => value + 1);
                   await reload();
                 } catch (error) {
                   setFlash({ tone: "bad", message: error.message });
@@ -1979,7 +2007,7 @@ export default function Page() {
             },
       });
       setGridStamp((value) => value + 1);
-      setRaiseStamp((value) => value + 1);
+      watchRaise(row.tenantId);
       await reload();
     } catch (error) {
       setFlash({ tone: "bad", message: error.message });
@@ -2015,6 +2043,7 @@ export default function Page() {
                 try {
                   await apiRequest("/api/payments?id=" + paymentId, { method: "DELETE" }, token);
                   setGridStamp((value) => value + 1);
+                  setRaiseStamp((value) => value + 1);
                   await reload();
                 } catch (error) {
                   setFlash({ tone: "bad", message: error.message });
@@ -2023,7 +2052,7 @@ export default function Page() {
             },
       });
       setGridStamp((value) => value + 1);
-      setRaiseStamp((value) => value + 1);
+      watchRaise(item.tenantId);
       await reload();
     } catch (error) {
       setFlash({ tone: "bad", message: error.message });
@@ -2822,10 +2851,11 @@ export default function Page() {
           token={token}
           onClose={() => setModal(null)}
           onDone={async (message) => {
+            const tenantId = modal.row.tenantId;
             setModal(null);
             setFlash({ tone: "ok", message });
             setGridStamp((value) => value + 1);
-            setRaiseStamp((value) => value + 1);
+            watchRaise(tenantId);
             await reload();
           }}
         />
@@ -2893,7 +2923,10 @@ export default function Page() {
           date={modal.date}
           token={token}
           onClose={() => setModal(null)}
-          onSaved={handleSaved}
+          onSaved={async (message) => {
+            watchRaise("*");
+            await handleSaved(message);
+          }}
         />
       ) : null}
       {modal?.type === "expense" ? (
@@ -2945,10 +2978,12 @@ export default function Page() {
           token={token}
           onClose={() => setModal(null)}
           onSaved={async (message) => {
+            const tenantId = modal.kind === "rent" ? modal.row?.tenantId : null;
             setModal(null);
             setFlash({ tone: "ok", message });
             setGridStamp((value) => value + 1);
             setDuesStamp((value) => value + 1);
+            if (tenantId) watchRaise(tenantId);
             await reload();
           }}
         />
