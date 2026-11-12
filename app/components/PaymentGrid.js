@@ -11,6 +11,7 @@ import {
   FilePdf,
   MagnifyingGlass,
   Minus,
+  PencilSimple,
   Plus,
   WarningCircle,
 } from "@phosphor-icons/react";
@@ -59,6 +60,7 @@ export default function PaymentGrid({
   onOpenTenant,
   onPay,
   onDefer,
+  onBulk,
   onExportMonth,
   onExportYear,
   exportBusy = "",
@@ -214,6 +216,10 @@ export default function PaymentGrid({
                     </span>
                   </div>
                   <div className="pg-actions">
+                    <button className="btn btn-quiet btn-sm" type="button" onClick={() => onBulk(row)}>
+                      <PencilSimple weight="bold" />
+                      Toplu düzelt
+                    </button>
                     <button className="btn btn-quiet btn-sm" type="button" onClick={() => onDefer(row.tenantId)}>
                       <Clock weight="bold" />
                       Ertele

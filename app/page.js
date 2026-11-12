@@ -59,6 +59,7 @@ import LedgerView from "./components/Ledger";
 import TodosView from "./components/Todos";
 import PaymentGrid from "./components/PaymentGrid";
 import TodayDue from "./components/TodayDue";
+import BulkFixSheet from "./components/BulkFix";
 import ReportsView from "./components/Reports";
 import SettingsView from "./components/Settings";
 import {
@@ -2550,6 +2551,7 @@ export default function Page() {
                   onOpenTenant={openTenantById}
                   onPay={(tenantId) => setModal({ type: "payment", tenantId })}
                   onDefer={(tenantId) => setModal({ type: "defer", tenantId })}
+                  onBulk={(row) => setModal({ type: "bulk", row, year: grid.year, currentMonth: grid.currentMonth })}
                   onExportMonth={exportPaymentMonth}
                   onExportYear={exportPaymentYear}
                   exportBusy={paymentExportBusy}
@@ -2812,6 +2814,22 @@ export default function Page() {
       {flash ? <Toast flash={flash} onClose={() => setFlash(null)} /> : null}
       <ConfirmHost />
 
+      {modal?.type === "bulk" ? (
+        <BulkFixSheet
+          row={modal.row}
+          year={modal.year}
+          currentMonth={modal.currentMonth}
+          token={token}
+          onClose={() => setModal(null)}
+          onDone={async (message) => {
+            setModal(null);
+            setFlash({ tone: "ok", message });
+            setGridStamp((value) => value + 1);
+            setRaiseStamp((value) => value + 1);
+            await reload();
+          }}
+        />
+      ) : null}
       {modal?.type === "raise" ? (
         <RaiseSheet
           suggestion={modal.suggestion}
