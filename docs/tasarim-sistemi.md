@@ -108,6 +108,13 @@ Nasıl çalışır:
 - `AccentPicker` (page.js) üst şeritte açılır; içinde Açık/Koyu seçimi de vardır. Telefonda alttan sabit panel olur.
 - Palet geçişi yalnız renk özelliklerini canlandırır (§45 `transition-property`).
 
+### Grafik (kategorik seri) renkleri
+Borsa ekranındaki dağılım çubuğu ve kağıt noktaları için `--series-1` … `--series-8` (§56), `--series-0` "Diğer" grisi. Değerler `dataviz` doğrulayıcısından geçmiş sabit sıradır; açık ve koyu yüzey için ayrı adımlar tanımlıdır (`:root` ve `:root[data-theme="dark"]`).
+- Sınıf `.s-1` … `.s-8` / `.s-0` öğeye `--c` verir; işaret `background: var(--c)` kullanır.
+- Renk varlığa bağlıdır, sıraya değil (kağıdın eklenme sırası); 9. ve sonrası "Diğer"de toplanır, yeni renk üretilmez.
+- Seri renkleri durum renkleriyle (`--ok/--bad`) karıştırılmaz; kâr/zarar her zaman ikon + işaretle yazılır. Metin seri rengini giymez, yanındaki işaret kimliği taşır.
+- Açık yüzeyde 3 renk 3:1'in altında kalır; bu yüzden çubuğun altında ad + değer + yüzde listesi (tablo görünümü) her zaman vardır.
+
 ### Gizlilik modu
 - Bayrak: `<html data-privacy="on|off">`, anahtar `kira-akis-privacy`. Kısayol ⌘⇧H / Ctrl+Shift+H; yan menüde "Tutarları gizle" anahtarı (`.switch`), palette de bir düğme.
 - Maske **CSS ile değil biçimlendiricilerle** yapılır: `formatCurrency` → `•••• TL`, `formatMoneyShort` → `••••`. Bu yüzden ekrana basılan **her** tutar bu fonksiyonlardan geçmelidir; `toLocaleString` ile kendi tutarını basma. Tutardan türetilen bir değer (ör. fark, yeni kira önizlemesi) gösteriyorsan `isPrivate()` ile gizle (bkz. `Raises.js`).
@@ -209,6 +216,11 @@ Ek ince ayar sorguları: 400px, 360px (sütun sayısı azaltma), 820px (girdiler
 Safe area: alt öğelerde `env(safe-area-inset-bottom)`, telefonda yan boşluk `max(12px, env(safe-area-inset-left/right))`.
 
 ---
+
+### Borsa ekranı (`app/components/Stocks.js`, §55–56)
+- Üstte portföy paneli (`.stock-hero`): büyük değer (`clamp(32px, 5vw, 48px)`), kâr/zarar, maliyet, kağıt/lot/fiyat zamanı; altında 28 px (telefonda 22 px) dağılım çubuğu (`.stock-alloc`, parçalar arası 2 px), payı %9 ve üstü olan parçada yüzde yazılır.
+- Kutular `.stock-card`: `minmax(156px, 1fr)` ızgara, telefonda 2 sütun, 360 px altında 1 sütun; logo 44 px (telefonda 40 px); − / + düğmeleri masaüstünde 32 px, dokunmatikte 44 px.
+- Hisse fiyatı kuruşlu yazılır (`291,80 TL`, kira tutarlarından farklı olarak) ama yine gizlilik modunda maskelenir.
 
 ## 6. Hareket
 
