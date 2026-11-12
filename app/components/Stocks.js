@@ -544,13 +544,32 @@ export default function StocksView({ token, onFlash }) {
   const totalProfit = priced.length ? totalValue - pricedCost : null;
   const totalPct = totalProfit !== null && pricedCost ? (totalProfit / pricedCost) * 100 : null;
 
+  /* Portföy: elde lotu olan kağıtların değeri (fiyat yoksa maliyeti).
+     Renk kağıda bağlıdır, sıraya değil: eklenme sırasına göre sabit 8 renk;
+     9. ve sonrası "Diğer" grisinde toplanır. */
+  const valueOf = (item) => (item.lots > 0 ? (item.marketValue ?? item.totalCost) : 0);
+  const slotOf = new Map(
+    [...stocks].sort((a, b) => a.id.localeCompare(b.id)).map((item, index) => [item.id, index < 8 ? index + 1 : 0])
+  );
+  const portfolio = stocks.reduce((sum, item) => sum + valueOf(item), 0);
+  const unpriced = stocks.filter((item) => item.lots > 0 && item.marketValue === null).length;
+  const shareOf = (item) => (portfolio > 0 ? (valueOf(item) / portfolio) * 100 : 0);
+  const named = stocks
+    .filter((item) => valueOf(item) > 0 && slotOf.get(item.id) > 0)
+    .sort((a, b) => slotOf.get(a.id) - slotOf.get(b.id))
+    .map((item) => ({ key: item.id, label: item.symbol, slot: slotOf.get(item.id), value: valueOf(item), share: shareOf(item) }));
+  const restValue = stocks.filter((item) => slotOf.get(item.id) === 0).reduce((sum, item) => sum + valueOf(item), 0);
+  const parts = restValue > 0
+    ? [...named, { key: "other", label: "Diğer", slot: 0, value: restValue, share: (restValue / portfolio) * 100 }]
+    : named;
+  const shareText = (value) => "%" + new Intl.NumberFormat("tr-TR", { maximumFractionDigits: value < 10 ? 1 : 0 }).format(value);
+  const lastUpdate = stocks.map((item) => item.lastPriceAt).filter(Boolean).sort().pop();
+
   return (
     <div className="view stocks-view">
       <div className="view-bar">
         <p className="view-summary">
-          {stocks.length} kağıt · {held} elde · maliyet {formatCurrency(totalCost)}
-          {priced.length ? <> · değer {formatCurrency(totalValue)} · </> : null}
-          {priced.length ? <ProfitLine profit={totalProfit} profitPct={totalPct} /> : null}
+          {stocks.length} kağıt · {held} elde
         </p>
         <div className="view-actions">
           {stocks.length ? (
@@ -566,6 +585,64 @@ export default function StocksView({ token, onFlash }) {
         </div>
       </div>
 
+      {portfolio > 0 ? (
+        <section className="stock-hero glass" aria-label="Portföy özeti">
+          <div className="stock-hero-top">
+            <div className="stock-hero-main">
+              <span className="eyebrow">Portföy değeri</span>
+              <strong className="stock-hero-value">{formatCurrency(portfolio)}</strong>
+              <span className="stock-hero-sub">
+                {totalProfit !== null ? <ProfitLine profit={totalProfit} profitPct={totalPct} /> : null}
+                <span className="num">Maliyet {formatCurrency(totalCost)}</span>
+              </span>
+            </div>
+            <dl className="stock-hero-facts">
+              <div><dt>Kağıt</dt><dd className="num">{held}</dd></div>
+              <div><dt>Toplam lot</dt><dd className="num">{formatLots(stocks.reduce((sum, item) => sum + item.lots, 0))}</dd></div>
+              <div>
+                <dt>Fiyatlar</dt>
+                <dd className="num">
+                  {lastUpdate
+                    ? new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(lastUpdate))
+                    : "—"}
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          <div
+            className="stock-alloc"
+            role="img"
+            aria-label={"Portföy dağılımı: " + parts.map((part) => part.label + " " + shareText(part.share)).join(", ")}
+          >
+            {parts.map((part) => (
+              <span
+                key={part.key}
+                className={"stock-alloc-part s-" + part.slot}
+                style={{ flexGrow: part.share, flexBasis: 0 }}
+                title={part.label + " · " + formatCurrency(part.value) + " · " + shareText(part.share)}
+              >
+                {part.share >= 9 ? <span className="num">{shareText(part.share)}</span> : null}
+              </span>
+            ))}
+          </div>
+
+          <ul className="stock-alloc-legend">
+            {parts.map((part) => (
+              <li key={part.key}>
+                <i className={"stock-dot s-" + part.slot} aria-hidden="true" />
+                <strong>{part.label}</strong>
+                <span className="num">{formatCurrency(part.value)}</span>
+                <span className="num stock-alloc-share">{shareText(part.share)}</span>
+              </li>
+            ))}
+          </ul>
+          {unpriced ? (
+            <p className="field-hint">Fiyatı henüz gelmeyen {unpriced} kağıt maliyetiyle sayıldı.</p>
+          ) : null}
+        </section>
+      ) : null}
+
       {stocks.length ? (
         <div className="stock-grid">
           {stocks.map((stock, index) => (
@@ -580,6 +657,17 @@ export default function StocksView({ token, onFlash }) {
                 <strong className="stock-symbol">{stock.symbol}</strong>
                 {stock.name ? <span className="stock-name">{stock.name}</span> : null}
               </button>
+
+              {stock.lots > 0 ? (
+                <div className="stock-value" title={stock.marketValue === null ? "Fiyat yok; maliyetle gösteriliyor" : "Lot × güncel fiyat"}>
+                  <span className="stock-value-label">
+                    <i className={"stock-dot s-" + (slotOf.get(stock.id) || 0)} aria-hidden="true" />
+                    {stock.marketValue === null ? "Maliyet" : "Toplam değer"}
+                  </span>
+                  <strong className="num">{formatCurrency(valueOf(stock))}</strong>
+                  <small className="num">portföyün {shareText(shareOf(stock))}</small>
+                </div>
+              ) : null}
 
               <div className="stock-lots" role="group" aria-label={stock.symbol + " lot"}>
                 <button

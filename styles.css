@@ -4525,3 +4525,74 @@ body, .rail, .topbar, .tile, .panel, .row, .btn, .rail-link, .tab {
 .stock-foot .stock-profit { font-size: 11px; font-weight: 700; text-transform: none; letter-spacing: 0; margin-top: 2px; }
 .stock-foot .stock-profit.tone-ok { color: var(--ok); }
 .stock-foot .stock-profit.tone-bad { color: var(--bad); }
+
+/* ---------- 56. Borsa: portföy paneli ve dağılım çubuğu ----------
+   Kategorik seri renkleri: dataviz doğrulayıcısından geçmiş sabit 8'li sıra
+   (açık ve koyu yüzey için ayrı adımlar). Durum renkleri (--ok/--bad) bunlarla
+   karıştırılmaz; kâr/zarar her zaman ikon + işaretle yazılır. */
+:root {
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100;
+  --series-5: #e87ba4; --series-6: #008300; --series-7: #6250d6; --series-8: #e34948;
+  --series-0: #8a93a6;
+}
+:root[data-theme="dark"] {
+  --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+  --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
+  --series-0: #6b7489;
+}
+.s-0 { --c: var(--series-0); } .s-1 { --c: var(--series-1); } .s-2 { --c: var(--series-2); }
+.s-3 { --c: var(--series-3); } .s-4 { --c: var(--series-4); } .s-5 { --c: var(--series-5); }
+.s-6 { --c: var(--series-6); } .s-7 { --c: var(--series-7); } .s-8 { --c: var(--series-8); }
+
+.stock-hero { display: grid; gap: var(--a-4); padding: var(--a-5); border-radius: var(--r-4); }
+.stock-hero-top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--a-4); }
+.stock-hero-main { display: grid; gap: var(--a-1); min-width: 0; }
+.stock-hero-value { font-size: clamp(32px, 5vw, 48px); font-weight: 700; letter-spacing: -0.035em; line-height: 1.05; }
+.stock-hero-sub { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--a-3); font-size: var(--fs-sm); color: var(--text-2); }
+.stock-hero-sub .stock-profit { font-size: var(--fs-sm); }
+.stock-hero-facts { display: flex; gap: var(--a-5); margin: 0; }
+.stock-hero-facts div { display: grid; gap: 2px; }
+.stock-hero-facts dt { font-size: var(--fs-xs); color: var(--text-3); font-weight: 600; }
+.stock-hero-facts dd { margin: 0; font-size: var(--fs-md); font-weight: 700; }
+
+.stock-alloc { display: flex; gap: 2px; height: 28px; border-radius: var(--r-1); overflow: hidden; }
+.stock-alloc-part {
+  display: flex;
+  align-items: center;
+  min-width: 4px;
+  padding-left: 6px;
+  border-radius: 4px;
+  background: var(--c);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.stock-alloc-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--a-1) var(--a-4);
+}
+.stock-alloc-legend li { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: var(--a-2); font-size: var(--fs-sm); padding: 4px 0; border-bottom: 1px solid var(--line); }
+.stock-alloc-legend strong { font-weight: 700; }
+.stock-alloc-legend .num { color: var(--text-2); text-align: right; }
+.stock-alloc-legend .stock-alloc-share { color: var(--text); font-weight: 700; min-width: 4ch; }
+.stock-dot { width: 10px; height: 10px; border-radius: 3px; background: var(--c); flex: none; display: inline-block; }
+
+.stock-value { display: grid; justify-items: center; gap: 0; }
+.stock-value-label { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-3); font-weight: 600; }
+.stock-value strong { font-size: var(--fs-lg); font-weight: 700; letter-spacing: -0.02em; }
+.stock-value small { font-size: 11px; color: var(--text-3); }
+
+@media (max-width: 720px) {
+  .stock-hero { padding: var(--a-4); border-radius: 18px; gap: var(--a-3); }
+  .stock-hero-facts { width: 100%; justify-content: space-between; }
+  .stock-alloc { height: 22px; }
+  .stock-alloc-legend { grid-template-columns: minmax(0, 1fr); }
+  .stock-value strong { font-size: var(--fs-md); }
+}
+@media (forced-colors: active) { .stock-alloc-part, .stock-dot { forced-color-adjust: none; } }
