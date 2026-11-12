@@ -270,7 +270,11 @@ async function bulkSetPeriods({ tenantId, year, months, amount, correctRent = fa
   if (!(tutar > 0)) throw new Error('Tutar sıfırdan büyük olmalı.');
 
   let rentCorrected = false;
-  if (correctRent && tenant.rentAmount !== tutar) {
+  /* Kira "zam" diye değiştirildiyse eski aylar eski (yanlış) tutarı bekler ve
+     sarı (eksik) görünür; tutar aynı olsa da geçmiş tek satıra indirilir. */
+  const history = tenant.rentHistory || [];
+  const consistent = tenant.rentAmount === tutar && history.length === 1 && history[0].amount === tutar;
+  if (correctRent && !consistent) {
     const start = tenant.contractStart ||
       (tenant.rentHistory || []).map((item) => item.effectiveFrom).filter(Boolean)
         .sort((a, b) => new Date(a) - new Date(b))[0] ||

@@ -31,6 +31,11 @@ export default function BulkFixSheet({ row, year, currentMonth, token, onClose, 
   const amount = amountInput.trim() ? parseMoney(amountInput) : NaN;
   const valid = Number.isFinite(amount) && amount > 0 && months.length > 0;
   const rentChanges = Number.isFinite(amount) && amount !== row.rentAmount;
+  // Kira aynı görünse de eski aylar farklı tutar bekliyorsa (sarı) düzeltme gerekir.
+  const staleMonths = Number.isFinite(amount)
+    ? row.months.filter((cell) => months.includes(cell.month) && cell.expected !== amount)
+    : [];
+  const needsFix = rentChanges || staleMonths.length > 0;
   const left = MONTH_LONG.filter((unused, index) => !months.includes(index + 1));
 
   function toggle(month) {
@@ -54,7 +59,7 @@ export default function BulkFixSheet({ row, year, currentMonth, token, onClose, 
           method: "POST",
           body: JSON.stringify({
             tenantId: row.tenantId,
-            bulk: { year, months, amount, correctRent: rentChanges && correctRent },
+            bulk: { year, months, amount, correctRent: needsFix && correctRent },
           }),
         },
         token
@@ -82,12 +87,23 @@ export default function BulkFixSheet({ row, year, currentMonth, token, onClose, 
           required
         />
 
-        {rentChanges ? (
+        {needsFix ? (
           <label className="bulk-check">
             <input type="checkbox" checked={correctRent} onChange={(event) => setCorrectRent(event.target.checked)} />
             <span>
-              Aylık kirayı da <strong className="num">{formatCurrency(amount)}</strong> olarak düzelt (şu an{" "}
-              <span className="num">{formatCurrency(row.rentAmount)}</span>). Düzeltme zam sayılmaz; geçmiş aylar da bu tutara çekilir.
+              {rentChanges ? (
+                <>
+                  Aylık kirayı da <strong className="num">{formatCurrency(amount)}</strong> olarak düzelt (şu an{" "}
+                  <span className="num">{formatCurrency(row.rentAmount)}</span>).
+                </>
+              ) : (
+                <>
+                  {staleMonths.length} ay hâlâ eski tutarı bekliyor (ör.{" "}
+                  <span className="num">{formatCurrency(staleMonths[0].expected)}</span>); hepsi{" "}
+                  <strong className="num">{formatCurrency(amount)}</strong> beklesin, kutular yeşil olsun.
+                </>
+              )}{" "}
+              Düzeltme zam sayılmaz; eski yanlış tutar kira geçmişinden silinir.
             </span>
           </label>
         ) : null}
