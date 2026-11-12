@@ -253,7 +253,50 @@ async function loadTodayList({ reference = now() } = {}) {
   };
 }
 
+/* Toplu düzeltme: seçilen ayların kayıtları silinip her aya tek, verilen
+   tutarda kayıt düşer. İstenirse aylık kira da "düzeltme" olarak yazılır
+   (tutar baştan beri buymuş gibi; geçmiş aylar da bu tutara çekilir).
+   Yanlış girilmiş tutarları tek adımda temizlemek için; ay ay bildirim
+   gönderilmez. */
+async function bulkSetPeriods({ tenantId, year, months, amount, correctRent = false, source = 'web' }) {
+  const tenant = await findTenant(tenantId);
+  const y = Number(year);
+  if (!Number.isInteger(y) || y < 2000 || y > 2100) throw new Error('Geçersiz yıl.');
+  const list = [...new Set((Array.isArray(months) ? months : []).map(Number))]
+    .filter((m) => Number.isInteger(m) && m >= 1 && m <= 12)
+    .sort((a, b) => a - b);
+  if (!list.length) throw new Error('En az bir ay seçilmeli.');
+  const tutar = Math.round((Number(amount) || 0) * 100) / 100;
+  if (!(tutar > 0)) throw new Error('Tutar sıfırdan büyük olmalı.');
+
+  let rentCorrected = false;
+  if (correctRent && tenant.rentAmount !== tutar) {
+    const start = tenant.contractStart ||
+      (tenant.rentHistory || []).map((item) => item.effectiveFrom).filter(Boolean)
+        .sort((a, b) => new Date(a) - new Date(b))[0] ||
+      tenant.createdAt || new Date();
+    tenant.rentAmount = tutar;
+    tenant.rentHistory = [{ amount: tutar, previousAmount: 0, effectiveFrom: start, note: 'Tutar düzeltildi (toplu)' }];
+    await tenant.save();
+    rentCorrected = true;
+  }
+
+  const removed = await Payment.deleteMany({ tenant: tenant._id, year: y, month: { $in: list } });
+  await Payment.insertMany(list.map((month) => ({
+    tenant: tenant._id,
+    amount: tutar,
+    date: periodPaymentDate(tenant, month, y),
+    month,
+    year: y,
+    note: 'Toplu düzeltme',
+    source,
+  })));
+
+  return { tenantId: tenant._id.toString(), year: y, months: list, amount: tutar, replaced: removed.deletedCount || 0, rentCorrected };
+}
+
 module.exports = {
+  bulkSetPeriods,
   clearPeriod,
   loadTodayList,
   loadYearGrid,

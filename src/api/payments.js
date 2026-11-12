@@ -9,7 +9,7 @@ const { parsePeriod, serializePayment } = require('../utils/api');
 const { now } = require('../utils/format');
 const { requireMoney } = require('../utils/money');
 const { notifyPaymentDeleted, notifyPaymentRecorded } = require('../services/notificationService');
-const { clearPeriod, loadTodayList, loadYearGrid, markPeriodPaid, setPeriodAmount } = require('../services/payments');
+const { bulkSetPeriods, clearPeriod, loadTodayList, loadYearGrid, markPeriodPaid, setPeriodAmount } = require('../services/payments');
 
 function parsePaymentInput(body = {}) {
   const amount = requireMoney(body.amount, 'payment');
@@ -105,6 +105,20 @@ module.exports = async (req, res) => {
     const tenantId = String(req.body?.tenantId || req.body?.tenant || '').trim();
     if (!mongoose.isValidObjectId(tenantId)) {
       return res.status(400).json({ error: 'Geçersiz kiracı.' });
+    }
+
+    // Toplu düzeltme: seçilen aylar tek tutarla yeniden yazılır.
+    if (req.body?.bulk) {
+      const bulk = req.body.bulk;
+      const result = await bulkSetPeriods({
+        tenantId,
+        year: bulk.year,
+        months: bulk.months,
+        amount: requireMoney(bulk.amount, 'rent'),
+        correctRent: Boolean(bulk.correctRent),
+        source: 'web',
+      });
+      return res.status(200).json(result);
     }
 
     // Ay düzenlendi: dönemin tutarı doğrudan yazılır.

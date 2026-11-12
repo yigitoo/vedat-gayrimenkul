@@ -115,7 +115,7 @@ async function paidMonthsFor(items) {
   const ids = tenants.map((tenant) => tenant._id);
   const status = new Map();
   for (const year of years) {
-    const payments = await Payment.find({ tenant: { $in: ids }, year });
+    const payments = await Payment.find({ tenant: { $in: ids }, year }).select('tenant amount month year date').lean();
     const grid = buildYearGrid({ year, tenants, payments });
     for (const row of grid.rows) {
       for (const cell of row.months) status.set(row.tenantId + ':' + year + ':' + cell.month, cell.status === 'paid');

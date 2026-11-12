@@ -4276,3 +4276,29 @@ body, .rail, .topbar, .tile, .panel, .row, .btn, .rail-link, .tab {
 .pulse-track { display: flex; align-items: center; gap: var(--a-3); }
 .pulse-track .pulse-bar { flex: 1 1 auto; }
 .pulse-rate { flex: none; min-width: 4ch; text-align: right; font-size: var(--fs-sm); font-weight: 700; color: var(--text-2); }
+
+/* Toplu düzelt penceresi */
+.bulk-sheet { gap: var(--a-4); }
+.bulk-check { display: flex; gap: var(--a-2); align-items: flex-start; font-size: var(--fs-sm); color: var(--text-2); }
+.bulk-check input { width: 18px; height: 18px; margin-top: 2px; flex: none; accent-color: var(--accent); }
+.bulk-months { border: 0; margin: 0; padding: 0; display: grid; gap: var(--a-2); }
+.bulk-months legend { padding: 0; margin-bottom: var(--a-2); font-size: var(--fs-sm); font-weight: 600; color: var(--text-2); }
+.bulk-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--a-2); }
+.bulk-month {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 44px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-2);
+  background: var(--solid);
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  transition: border-color var(--t-fast) var(--ease), background-color var(--t-fast) var(--ease);
+}
+.bulk-month svg { width: 14px; height: 14px; color: var(--ok); }
+.bulk-month.is-on { border-color: var(--ok); background: var(--ok-soft); color: var(--text); }
+.bulk-left { margin: 0; font-size: var(--fs-xs); color: var(--text-3); }
+@media (max-width: 400px) { .bulk-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
