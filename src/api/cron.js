@@ -22,7 +22,7 @@ module.exports = async (req, res) => {
     if (String(req.query?.task || '') === 'stocks') {
       const day = new Date().getUTCDay();
       if (day === 0 || day === 6) return res.status(200).json({ stocks: { skipped: 'hafta sonu' } });
-      const stocks = await require('../services/stocks').refreshStockPrices();
+      const stocks = await require('../services/stocks').refreshStockPrices({ onlyHeld: true });
       return res.status(200).json({ stocks });
     }
 
@@ -47,7 +47,7 @@ module.exports = async (req, res) => {
     // Borsa: önceki günün kapanış fiyatları (her sabah). Hata kirayı durdurmasın.
     let stocks;
     try {
-      stocks = await require('../services/stocks').refreshStockPrices();
+      stocks = await require('../services/stocks').refreshStockPrices({ onlyHeld: true });
     } catch (error) {
       console.error('Borsa fiyat güncellemesi başarısız:', error);
       stocks = { error: error.message };
