@@ -4302,3 +4302,24 @@ body, .rail, .topbar, .tile, .panel, .row, .btn, .rail-link, .tab {
 .bulk-month.is-on { border-color: var(--ok); background: var(--ok-soft); color: var(--text); }
 .bulk-left { margin: 0; font-size: var(--fs-xs); color: var(--text-3); }
 @media (max-width: 400px) { .bulk-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+/* ---------- 54. Takvim durum noktaları, özet tablet düzeni ---------- */
+/* .cal-event ve .cal-legend metni --text-2'ye çekiyor; nokta da currentColor
+   olduğu için hepsi gri kalıyordu. Telefonda takvimde yalnız nokta görünür;
+   durum bilgisi orada tamamen kayboluyordu. Metin sakin kalır, nokta renklenir. */
+.cal-event.tone-ok i, .cal-legend .tone-ok .legend-dot { background: var(--ok); }
+.cal-event.tone-warn i, .cal-legend .tone-warn .legend-dot { background: var(--warn); }
+.cal-event.tone-bad i, .cal-legend .tone-bad .legend-dot { background: var(--bad); }
+.cal-event.tone-calm i, .cal-legend .tone-calm .legend-dot { background: var(--calm); }
+.cal-event.tone-accent i, .cal-legend .tone-accent .legend-dot { background: var(--accent); }
+.cal-event.is-planned.tone-ok i { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ok); }
+.cal-event.is-planned.tone-warn i { background: transparent; box-shadow: inset 0 0 0 1.5px var(--warn); }
+.cal-event.is-planned.tone-bad i { background: transparent; box-shadow: inset 0 0 0 1.5px var(--bad); }
+.cal-event.is-planned.tone-calm i { background: transparent; box-shadow: inset 0 0 0 1.5px var(--calm); }
+
+/* Tablette 5 özet kutusu 3+2: ilk sıra üçlü, ikinci sıra iki geniş kutu. */
+@media (max-width: 1080px) and (min-width: 721px) {
+  .pulse-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .pulse-item { grid-column: span 2; }
+  .pulse-item:nth-child(n + 4) { grid-column: span 3; padding-top: var(--a-3); border-top: 1px solid var(--line); }
+}

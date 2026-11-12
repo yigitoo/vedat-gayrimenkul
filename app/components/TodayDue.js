@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarCheck, CheckCircle, Clock, MagnifyingGlass, Plus, Receipt, UserPlus, WarningCircle } from "@phosphor-icons/react";
-import { formatCurrency, formatDate, initials, matchesSearch, normalizeSearch } from "../lib/client";
+import { formatCurrency, formatDate, formatShortDate, initials, matchesSearch, normalizeSearch } from "../lib/client";
 import { RaiseSuggestions } from "./Raises";
 
 const MONTH_LONG = [
@@ -50,7 +50,9 @@ function DueRow({ item, index, pending, onMark, onPay }) {
         )}
         <span>
           {periodText(item)}
-          {item.status !== "today" ? " · son gün " + formatDate(item.dueDate) : ""}
+          {item.status !== "today"
+            ? " · son gün " + formatShortDate(item.dueDate, new Date(item.dueDate).getFullYear() !== new Date().getFullYear())
+            : ""}
           {item.isDeferred ? " · ertelendi" : ""}
           {partial ? " · " + formatCurrency(item.paid) + " ödendi" : ""}
         </span>
