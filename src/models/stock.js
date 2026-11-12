@@ -18,6 +18,12 @@ const stockSchema = new Schema({
   // Logo için şirketin web adresi (ör. thy.com); logoUrl boşsa buradan çekilir.
   website: { type: String, default: '', trim: true, lowercase: true, maxlength: 120 },
   trades: { type: [tradeSchema], default: [] },
+  // Güncel fiyat: her sabah otomatik (Yahoo Finance) ya da elle.
+  quoteSymbol: { type: String, default: '', trim: true, uppercase: true, maxlength: 20 },
+  lastPrice: { type: Number, default: null, min: 0 },
+  lastPriceAt: { type: Date, default: null },
+  priceSource: { type: String, enum: ['', 'yahoo', 'manual'], default: '' },
+  priceError: { type: String, default: '', maxlength: 160 },
 }, { timestamps: true });
 
 // Sıcak yenilemede model ikinci kez derlenmesin.

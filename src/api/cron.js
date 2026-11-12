@@ -33,7 +33,16 @@ module.exports = async (req, res) => {
     const trash = await purgeExpiredTenants();
 
     const rentIncrease = await require('../services/rentIncreases').runRentIncreaseCheck();
-    return res.status(200).json({ recurring, due, daily, monthly, fullReport, trash, rentIncrease });
+
+    // Borsa: önceki günün kapanış fiyatları (her sabah). Hata kirayı durdurmasın.
+    let stocks;
+    try {
+      stocks = await require('../services/stocks').refreshStockPrices();
+    } catch (error) {
+      console.error('Borsa fiyat güncellemesi başarısız:', error);
+      stocks = { error: error.message };
+    }
+    return res.status(200).json({ recurring, due, daily, monthly, fullReport, trash, rentIncrease, stocks });
   } catch (error) {
     console.error('Cron error:', error);
     return res.status(500).json({ error: error.message });

@@ -4,7 +4,7 @@ require('dotenv').config();
 const connectDB = require('../db');
 const Stock = require('../models/stock');
 const { requireWebAuth } = require('../utils/webAuth');
-const { summarize } = require('../services/stocks');
+const { summarize, quoteSymbolFor, refreshStockPrices } = require('../services/stocks');
 
 /* Borsa: kağıt listesi ve alım/satış satırları.
    GET liste · POST kağıt ekle · POST ?id&action=trade alım/satış ·
@@ -28,7 +28,26 @@ function serializeStock(stock) {
     logoUrl: stock.logoUrl || '',
     website: stock.website || '',
     trades,
-    ...summarize(stock.trades || []),
+    ...withMarket(summarize(stock.trades || []), stock),
+  };
+}
+
+// Güncel fiyat varsa piyasa değeri ve kâr/zarar.
+function withMarket(summary, stock) {
+  const price = Number.isFinite(stock.lastPrice) && stock.lastPrice > 0 ? stock.lastPrice : null;
+  const marketValue = price === null ? null : Math.round(summary.lots * price * 100) / 100;
+  const profit = marketValue === null ? null : Math.round((marketValue - summary.totalCost) * 100) / 100;
+  return {
+    ...summary,
+    quoteSymbol: quoteSymbolFor(stock),
+    customQuoteSymbol: stock.quoteSymbol || '',
+    lastPrice: price,
+    lastPriceAt: stock.lastPriceAt ? new Date(stock.lastPriceAt).toISOString() : null,
+    priceSource: stock.priceSource || '',
+    priceError: stock.priceError || '',
+    marketValue,
+    profit,
+    profitPct: profit === null || !summary.totalCost ? null : Math.round((profit / summary.totalCost) * 10000) / 100,
   };
 }
 
@@ -83,6 +102,12 @@ module.exports = async (req, res) => {
 
     const id = String(req.query.id || body.id || '').trim();
 
+    if (req.method === 'POST' && !id && String(req.query.action || body.action || '') === 'refresh') {
+      const result = await refreshStockPrices();
+      const stocks = await Stock.find({}).sort({ symbol: 1 });
+      return res.status(200).json({ ...result, stocks: stocks.map(serializeStock) });
+    }
+
     if (req.method === 'POST' && !id) {
       const symbol = String(body.symbol || '').trim().toLocaleUpperCase('tr-TR');
       if (!/^[A-ZÇĞİÖŞÜ0-9.]{1,12}$/.test(symbol)) throw badRequest('Kağıt kodu 1-12 harf/rakam olmalı (ör. THYAO).');
@@ -121,6 +146,17 @@ module.exports = async (req, res) => {
       if (body.name !== undefined) stock.name = String(body.name || '').trim().slice(0, 80);
       if (body.logoUrl !== undefined) stock.logoUrl = parseLogo(body.logoUrl);
       if (body.website !== undefined) stock.website = parseWebsite(body.website);
+      if (body.quoteSymbol !== undefined) {
+        const quote = String(body.quoteSymbol || '').trim().toUpperCase();
+        if (quote && !/^[A-Z0-9.^=-]{1,20}$/.test(quote)) throw badRequest('Fiyat kodu geçersiz (ör. THYAO.IS).');
+        stock.quoteSymbol = quote;
+      }
+      if (body.lastPrice !== undefined && String(body.lastPrice).trim() !== '') {
+        stock.lastPrice = parseNumber(body.lastPrice, 'Güncel fiyat');
+        stock.lastPriceAt = new Date();
+        stock.priceSource = 'manual';
+        stock.priceError = '';
+      }
       await stock.save();
       return res.status(200).json({ stock: serializeStock(stock) });
     }

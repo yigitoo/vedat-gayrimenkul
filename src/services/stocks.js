@@ -38,3 +38,68 @@ function summarize(trades = []) {
 }
 
 module.exports = { summarize };
+
+/* ---------- Güncel fiyat ----------
+   Kaynak: Yahoo Finance grafik verisi (anahtarsız, herkese açık). BIST
+   kağıdı ".IS" ekiyle (THYAO.IS), ABD kağıdı olduğu gibi aranır. Her sabah
+   cron önceki kapanışı çeker; panelde "Fiyatları güncelle" anında çeker.
+   Çekilemeyen kağıt eski fiyatında kalır, hata satırı not düşülür; fiyat
+   elle de girilebilir. */
+const US_TICKERS = new Set(['AAPL', 'AMZN', 'GOOGL', 'GOOG', 'META', 'MSFT', 'NFLX', 'NVDA', 'TSLA', 'AMD', 'INTC', 'KO', 'PEP', 'DIS', 'BABA', 'SPY', 'QQQ']);
+const FETCH_TIMEOUT_MS = 10000;
+
+function quoteSymbolFor(stock) {
+  if (stock.quoteSymbol) return stock.quoteSymbol;
+  const symbol = String(stock.symbol || '').toUpperCase();
+  if (US_TICKERS.has(symbol) || symbol.includes('.')) return symbol;
+  return symbol + '.IS';
+}
+
+async function fetchQuote(quoteSymbol) {
+  const url = 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(quoteSymbol) + '?range=5d&interval=1d';
+  const response = await fetch(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+  if (!response.ok) throw new Error('HTTP ' + response.status);
+  const data = await response.json();
+  const result = data?.chart?.result?.[0];
+  const meta = result?.meta;
+  if (!meta) throw new Error(data?.chart?.error?.description || 'Fiyat bulunamadı');
+  let price = Number(meta.regularMarketPrice);
+  if (!Number.isFinite(price) || price <= 0) {
+    const closes = (result.indicators?.quote?.[0]?.close || []).filter((value) => Number.isFinite(value));
+    price = closes[closes.length - 1];
+  }
+  if (!Number.isFinite(price) || price <= 0) throw new Error('Fiyat bulunamadı');
+  const at = meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000) : new Date();
+  return { price: Math.round(price * 10000) / 10000, at, currency: meta.currency || '' };
+}
+
+async function refreshStockPrices({ onlyHeld = false } = {}) {
+  const Stock = require('../models/stock');
+  const stocks = await Stock.find({});
+  const updated = [];
+  const failed = [];
+  await Promise.all(stocks.map(async (stock) => {
+    if (onlyHeld && summarize(stock.trades).lots <= 0) return;
+    const quoteSymbol = quoteSymbolFor(stock);
+    try {
+      const quote = await fetchQuote(quoteSymbol);
+      stock.lastPrice = quote.price;
+      stock.lastPriceAt = quote.at;
+      stock.priceSource = 'yahoo';
+      stock.priceError = '';
+      updated.push(stock.symbol);
+    } catch (error) {
+      stock.priceError = (quoteSymbol + ': ' + (error.message || 'hata')).slice(0, 160);
+      failed.push(stock.symbol);
+    }
+    await stock.save();
+  }));
+  return { updated, failed };
+}
+
+module.exports.quoteSymbolFor = quoteSymbolFor;
+module.exports.fetchQuote = fetchQuote;
+module.exports.refreshStockPrices = refreshStockPrices;

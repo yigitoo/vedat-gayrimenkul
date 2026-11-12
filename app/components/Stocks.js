@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ChartBar, Minus, PencilSimple, Plus, Trash, WarningCircle } from "@phosphor-icons/react";
+import { ArrowsClockwise, ChartBar, Minus, PencilSimple, Plus, Trash, TrendDown, TrendUp, WarningCircle } from "@phosphor-icons/react";
 import { SheetFrame } from "./Sheets";
 import { askConfirm } from "./Feedback";
 import { apiRequest, formatCurrency, formatDate, isPrivate, toDateInput } from "../lib/client";
@@ -12,6 +12,31 @@ import { TICKER_DOMAINS, logoSources } from "../lib/stockLogos";
 function formatPrice(value) {
   if (isPrivate()) return "•••• TL";
   return new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0) + " TL";
+}
+
+function formatPercent(value) {
+  if (isPrivate()) return "%••";
+  return "%" + new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 1 }).format(Math.abs(value || 0));
+}
+
+// Kâr/zarar satırı: işaret, renk ve ikon birlikte (durum yalnız renkle anlatılmaz).
+function ProfitLine({ profit, profitPct, compact = false }) {
+  if (profit === null || profit === undefined) return null;
+  const up = profit >= 0;
+  const Glyph = up ? TrendUp : TrendDown;
+  return (
+    <span className={"stock-profit num " + (up ? "tone-ok" : "tone-bad")}>
+      <Glyph weight="bold" />
+      {(up ? "+" : "−") + formatCurrency(Math.abs(profit)).replace(/^-/, "")}
+      {profitPct !== null && profitPct !== undefined ? (compact ? " " : " · ") + formatPercent(profitPct) : ""}
+    </span>
+  );
+}
+
+function priceWhen(stock) {
+  if (!stock.lastPriceAt) return "";
+  const when = new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(stock.lastPriceAt));
+  return when + (stock.priceSource === "manual" ? " · elle" : "");
 }
 
 function formatLots(value) {
@@ -294,6 +319,56 @@ function TradeSheet({ stock, side, token, onClose, onSaved }) {
   );
 }
 
+/* ---------- Güncel fiyat: kaynak bilgisi, elle fiyat, fiyat kodu ---------- */
+function PriceForm({ stock, token, onSaved }) {
+  const [price, setPrice] = useState("");
+  const [quote, setQuote] = useState(stock.customQuoteSymbol || "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function save(event) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const body = { quoteSymbol: quote };
+      if (price.trim()) body.lastPrice = price;
+      const result = await apiRequest("/api/stocks?id=" + stock.id, { method: "PATCH", body: JSON.stringify(body) }, token);
+      setPrice("");
+      onSaved(result.stock, price.trim() ? stock.symbol + " fiyatı elle güncellendi." : stock.symbol + " fiyat kodu kaydedildi.", true);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="stock-price-form" onSubmit={save}>
+      <p className="field-hint">
+        {stock.lastPrice
+          ? "Güncel fiyat " + priceWhen(stock) + " · her sabah otomatik güncellenir (" + stock.quoteSymbol + ")."
+          : "Henüz fiyat yok. Her sabah otomatik çekilir (" + stock.quoteSymbol + "); istersen elle gir."}
+      </p>
+      {stock.priceError ? (
+        <p className="field-hint tone-warn"><WarningCircle weight="fill" /> Son deneme çekilemedi: {stock.priceError}</p>
+      ) : null}
+      <div className="stock-price-row">
+        <div className="field">
+          <label htmlFor={"price-" + stock.id}>Güncel fiyatı elle gir</label>
+          <input id={"price-" + stock.id} className="num" inputMode="decimal" value={price} onChange={(event) => setPrice(event.target.value)} placeholder="ör. 312,40" />
+        </div>
+        <div className="field">
+          <label htmlFor={"quote-" + stock.id}>Fiyat kodu</label>
+          <input id={"quote-" + stock.id} value={quote} onChange={(event) => setQuote(event.target.value.toUpperCase())} placeholder={stock.quoteSymbol} autoCapitalize="characters" />
+        </div>
+        <button className={"btn btn-glass btn-sm" + (busy ? " is-busy" : "")} type="submit" disabled={busy}>Kaydet</button>
+      </div>
+      {error ? <p className="form-error" role="alert"><WarningCircle weight="fill" />{error}</p> : null}
+    </form>
+  );
+}
+
 /* ---------- Kağıt dosyası: işlem geçmişi ---------- */
 function StockDetailSheet({ stock, token, onClose, onSaved, onEdit, onDeleted }) {
   const [busy, setBusy] = useState("");
@@ -342,7 +417,15 @@ function StockDetailSheet({ stock, token, onClose, onSaved, onEdit, onDeleted })
           <div><span>Lot</span><strong className="num">{formatLots(stock.lots)}</strong></div>
           <div><span>Ortalama</span><strong className="num">{formatPrice(stock.averagePrice)}</strong></div>
           <div><span>Maliyet</span><strong className="num">{formatCurrency(stock.totalCost)}</strong></div>
+          {stock.lastPrice ? (
+            <>
+              <div><span>Güncel fiyat</span><strong className="num">{formatPrice(stock.lastPrice)}</strong></div>
+              <div><span>Değer</span><strong className="num">{formatCurrency(stock.marketValue)}</strong></div>
+              <div><span>Kâr / zarar</span><ProfitLine profit={stock.profit} profitPct={stock.profitPct} /></div>
+            </>
+          ) : null}
         </div>
+        <PriceForm stock={stock} token={token} onSaved={onSaved} />
         {stock.trades.length ? (
           <ul className="stock-trades">
             {stock.trades.map((trade) => (
@@ -390,6 +473,26 @@ function StockDetailSheet({ stock, token, onClose, onSaved, onEdit, onDeleted })
 export default function StocksView({ token, onFlash }) {
   const [stocks, setStocks] = useState(null);
   const [sheet, setSheet] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function refreshPrices() {
+    setRefreshing(true);
+    try {
+      const result = await apiRequest("/api/stocks?action=refresh", { method: "POST", body: "{}" }, token);
+      setStocks(result.stocks || []);
+      const failed = result.failed || [];
+      onFlash(
+        failed.length ? "bad" : "ok",
+        failed.length
+          ? (result.updated?.length || 0) + " kağıt güncellendi; çekilemeyen: " + failed.join(", ") + ". Fiyatı kağıt dosyasından elle girebilirsin."
+          : (result.updated?.length || 0) + " kağıdın fiyatı güncellendi."
+      );
+    } catch (error) {
+      onFlash("bad", error.message);
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -435,14 +538,27 @@ export default function StocksView({ token, onFlash }) {
 
   const totalCost = stocks.reduce((sum, item) => sum + item.totalCost, 0);
   const held = stocks.filter((item) => item.lots > 0).length;
+  const priced = stocks.filter((item) => item.lots > 0 && item.marketValue !== null);
+  const totalValue = priced.reduce((sum, item) => sum + item.marketValue, 0);
+  const pricedCost = priced.reduce((sum, item) => sum + item.totalCost, 0);
+  const totalProfit = priced.length ? totalValue - pricedCost : null;
+  const totalPct = totalProfit !== null && pricedCost ? (totalProfit / pricedCost) * 100 : null;
 
   return (
     <div className="view stocks-view">
       <div className="view-bar">
         <p className="view-summary">
-          {stocks.length} kağıt · {held} elde · toplam maliyet {formatCurrency(totalCost)}
+          {stocks.length} kağıt · {held} elde · maliyet {formatCurrency(totalCost)}
+          {priced.length ? <> · değer {formatCurrency(totalValue)} · </> : null}
+          {priced.length ? <ProfitLine profit={totalProfit} profitPct={totalPct} /> : null}
         </p>
         <div className="view-actions">
+          {stocks.length ? (
+            <button className={"btn btn-glass btn-sm" + (refreshing ? " is-busy" : "")} type="button" onClick={refreshPrices} disabled={refreshing}>
+              <ArrowsClockwise weight="bold" />
+              Fiyatları güncelle
+            </button>
+          ) : null}
           <button className="btn btn-primary btn-sm" type="button" onClick={() => setSheet({ type: "form" })}>
             <Plus weight="bold" />
             Kağıt ekle
@@ -492,7 +608,14 @@ export default function StocksView({ token, onFlash }) {
               <div className="stock-foot">
                 <span>Ortalama</span>
                 <strong className="num">{stock.lots > 0 ? formatPrice(stock.averagePrice) : "—"}</strong>
-                <small className="num">{stock.lots > 0 ? "Maliyet " + formatCurrency(stock.totalCost) : "Elde lot yok"}</small>
+                {stock.lots > 0 && stock.lastPrice ? (
+                  <>
+                    <small className="num">Güncel {formatPrice(stock.lastPrice)}</small>
+                    <ProfitLine profit={stock.profit} profitPct={stock.profitPct} compact />
+                  </>
+                ) : (
+                  <small className="num">{stock.lots > 0 ? "Maliyet " + formatCurrency(stock.totalCost) : "Elde lot yok"}</small>
+                )}
               </div>
             </article>
           ))}
