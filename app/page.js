@@ -24,6 +24,7 @@ import {
   HandCoins,
   List,
   ListChecks,
+  ChartBar,
   MagnifyingGlass,
   Notebook,
   Moon,
@@ -57,6 +58,7 @@ import DuesView from "./components/Dues";
 import MonthSheet from "./components/MonthSheet";
 import LedgerView from "./components/Ledger";
 import TodosView from "./components/Todos";
+import StocksView from "./components/Stocks";
 import PaymentGrid from "./components/PaymentGrid";
 import TodayDue from "./components/TodayDue";
 import BulkFixSheet from "./components/BulkFix";
@@ -134,6 +136,7 @@ const VIEWS = [
   { id: "dues", label: "Aidat", icon: Buildings, lead: "Apartman ve site aidatı: hangi ay ödendi.", group: "Kira" },
   { id: "bus", label: "Otobüs", icon: Bus, lead: "Hat defteri: gün gün hasılat, mazot, yövmiye.", group: "İşletme" },
   { id: "ledger", label: "Gider notları", icon: Notebook, lead: "Her şeyden bağımsız harcamalar: gün gün, ay ay.", group: "İşletme" },
+  { id: "stocks", label: "Borsa", icon: ChartBar, lead: "Hisse kağıtların: lot, alımlar ve ortalama maliyet.", group: "İşletme" },
   { id: "todos", label: "Yapılacaklar", icon: ListChecks, lead: "Güne not düş, saatine kadar geri sayım işlesin.", group: "Planlama" },
   { id: "reports", label: "Raporlar", icon: ChartLineUp, lead: "Aylara yayılan tahsilat, gider ve aylık tam rapor.", group: "Planlama" },
   { id: "activity", label: "Akış", icon: Pulse, lead: "Son kayıtlar ve bildirim geçmişi.", group: "Planlama" },
@@ -165,6 +168,7 @@ const SCREEN_SLUGS = {
   dues: "aidat",
   bus: "otobus",
   ledger: "gidernotlari",
+  stocks: "borsa",
   todos: "yapilacaklar",
   reports: "raporlar",
   activity: "akis",
@@ -2653,6 +2657,8 @@ export default function Page() {
 
           {view === "todos" ? <TodosView token={token} onFlash={notify} /> : null}
 
+          {view === "stocks" ? <StocksView token={token} onFlash={notify} /> : null}
+
           {view === "ledger" ? <LedgerView token={token} onFlash={notify} /> : null}
 
           {view === "tenants" ? (
@@ -3072,6 +3078,7 @@ function screenId(value) {
     yapilacaklar: "todos",
     notlar: "todos",
     gidernotlari: "ledger",
+    borsa: "stocks",
     kiracilar: "tenants",
     raporlar: "reports",
     akis: "activity",

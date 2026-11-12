@@ -4323,3 +4323,151 @@ body, .rail, .topbar, .tile, .panel, .row, .btn, .rail-link, .tab {
   .pulse-item { grid-column: span 2; }
   .pulse-item:nth-child(n + 4) { grid-column: span 3; padding-top: var(--a-3); border-top: 1px solid var(--line); }
 }
+
+/* ---------- 55. Borsa ---------- */
+.stock-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--a-4);
+}
+.stock-card {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: var(--a-4);
+  padding: var(--a-5) var(--a-4) var(--a-4);
+  border-radius: var(--r-3);
+  text-align: center;
+  animation: screen-in var(--t-enter) var(--ease-out) backwards;
+  animation-delay: calc(min(var(--i, 0), 10) * 40ms);
+  transition: transform var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+@media (hover: hover) and (pointer: fine) {
+  .stock-card:hover { transform: translateY(-2px); box-shadow: var(--sh-2); }
+}
+.stock-head {
+  display: grid;
+  justify-items: center;
+  gap: var(--a-1);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  border-radius: var(--r-2);
+}
+.stock-logo {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: var(--r-3);
+  border: 1px solid var(--line);
+  background: var(--solid);
+  box-shadow: var(--sh-1);
+  margin-bottom: var(--a-2);
+}
+.stock-logo.is-lg { width: 72px; height: 72px; }
+.stock-logo img { width: 100%; height: 100%; object-fit: contain; padding: 8px; background: var(--solid); }
+.stock-logo-letters {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.stock-symbol { font-size: var(--fs-lg); font-weight: 700; letter-spacing: 0.02em; }
+.stock-name {
+  max-width: 100%;
+  font-size: var(--fs-sm);
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stock-lots {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  align-items: center;
+  gap: var(--a-2);
+  padding: var(--a-2);
+  border-radius: var(--r-2);
+  background: var(--solid-2);
+  border: 1px solid var(--line);
+}
+.stock-step {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-2);
+  border: 1px solid var(--line-strong);
+  background: var(--solid);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: transform var(--t-fast) var(--ease), background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+.stock-step svg { width: 18px; height: 18px; }
+.stock-step:active { transform: scale(0.94); }
+.stock-step:disabled { opacity: 0.4; cursor: not-allowed; }
+.stock-step.is-add { background: var(--accent); border-color: var(--accent); color: var(--accent-on); }
+.stock-lot-count { display: grid; line-height: 1.1; }
+.stock-lot-count strong { font-size: var(--fs-2xl); font-weight: 700; letter-spacing: -0.03em; }
+.stock-lot-count small { font-size: var(--fs-xs); color: var(--text-3); }
+.stock-foot { display: grid; gap: 2px; align-content: end; }
+.stock-foot span { font-size: var(--fs-xs); font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; }
+.stock-foot strong { font-size: var(--fs-xl); font-weight: 700; color: var(--accent); letter-spacing: -0.02em; }
+.stock-foot small { font-size: var(--fs-xs); color: var(--text-3); }
+
+.stock-form-preview { display: grid; justify-items: center; }
+.stock-stepper { display: grid; grid-template-columns: auto 1fr auto; gap: var(--a-2); align-items: center; }
+.stock-stepper input { text-align: center; font-size: var(--fs-lg); font-weight: 700; }
+.stock-preview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--a-3);
+  padding: var(--a-3) var(--a-4);
+  border-radius: var(--r-2);
+  background: var(--solid-2);
+  border: 1px solid var(--line);
+}
+.stock-preview div { display: grid; gap: 2px; }
+.stock-preview span { font-size: var(--fs-xs); color: var(--text-3); font-weight: 600; }
+.stock-preview strong { font-size: var(--fs-md); }
+.stock-trades { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--a-2); }
+.stock-trades li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--a-3);
+  padding: var(--a-2) var(--a-3);
+  border-radius: var(--r-2);
+  border: 1px solid var(--line);
+  background: var(--solid);
+}
+.stock-trades .pill svg { width: 12px; height: 12px; }
+.stock-trade-copy { display: grid; gap: 1px; min-width: 0; }
+.stock-trade-copy strong { font-size: var(--fs-md); }
+.stock-trade-copy small { font-size: var(--fs-xs); color: var(--text-3); }
+
+@media (max-width: 720px) {
+  .stock-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--a-3); }
+  .stock-card { padding: var(--a-4) var(--a-3) var(--a-3); gap: var(--a-3); border-radius: 18px; }
+  .stock-logo.is-lg { width: 56px; height: 56px; }
+  .stock-lots { grid-template-columns: 40px 1fr 40px; padding: var(--a-1); gap: var(--a-1); }
+  .stock-step { width: 40px; height: 44px; }
+  .stock-lot-count strong { font-size: var(--fs-xl); }
+  .stock-foot strong { font-size: var(--fs-lg); }
+}
+@media (max-width: 360px) {
+  .stock-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stock-card { animation: none !important; }
+}
+
+/* Ana alan ızgarası kısa içerikte boş yeri satırlara paylaştırıp üst şeridi
+   şişiriyordu (ör. az kağıtlı Borsa, boş ekranlar). Satırlar yukarıdan dizilir. */
+.main { align-content: start; }

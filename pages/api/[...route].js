@@ -17,6 +17,7 @@ const routes = {
   'rent-increases': () => require('../../src/api/rent-increases'),
   session: () => require('../../src/api/session'),
   settings: () => require('../../src/api/settings'),
+  stocks: () => require('../../src/api/stocks'),
   'set-webhook': () => require('../../src/api/set-webhook'),
   tenants: () => require('../../src/api/tenants'),
   todos: () => require('../../src/api/todos'),
